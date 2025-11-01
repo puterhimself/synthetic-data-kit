@@ -303,7 +303,8 @@ def ingest():
         "Web Page": "https://example.com/article",
         "Word Document": "path/to/document.docx",
         "PowerPoint": "path/to/presentation.pptx",
-        "Text File": "path/to/document.txt"
+        "Text File": "path/to/document.txt",
+        "Image": "path/to/image.png (use multimodal mode)"
     }
     
     return render_template('ingest.html', form=form, examples=examples)

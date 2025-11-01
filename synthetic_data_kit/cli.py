@@ -182,12 +182,13 @@ def ingest(
     ),
 ):
     """
-    Parse documents (PDF, HTML, YouTube, DOCX, PPT, TXT) into clean text.
+    Parse documents (PDF, HTML, YouTube, DOCX, PPT, TXT, images) into clean text.
     
     Can process:
     - Single file: synthetic-data-kit ingest document.pdf
     - Directory: synthetic-data-kit ingest ./documents/
     - URL: synthetic-data-kit ingest https://example.com/page.html
+    - Images: synthetic-data-kit ingest image.png --multimodal
     """
     import os
     from synthetic_data_kit.core.ingest import process_file

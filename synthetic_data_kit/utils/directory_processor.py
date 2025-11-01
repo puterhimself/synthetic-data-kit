@@ -14,7 +14,7 @@ from rich.progress import Progress, BarColumn, TextColumn, TimeElapsedColumn
 console = Console()
 
 # Supported file extensions for each command
-INGEST_EXTENSIONS = ['.pdf', '.html', '.htm', '.docx', '.pptx', '.txt']
+INGEST_EXTENSIONS = ['.pdf', '.html', '.htm', '.docx', '.pptx', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp']
 CREATE_EXTENSIONS = ['.txt', '.lance']
 CURATE_EXTENSIONS = ['.json']
 SAVE_AS_EXTENSIONS = ['.json']

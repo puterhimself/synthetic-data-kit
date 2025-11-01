@@ -26,7 +26,9 @@ dependencies = [
     "bootstrap-flask>=2.2.0",
     "beautifulsoup4>=4.12.0",
     "pylance",
-    "PyMuPDF"
+    "PyMuPDF",
+    "lance>=1.2.1",
+    "pyarrow>=15.0.0",
 ]
 
 # These fields appear in pip show
@@ -137,4 +139,12 @@ markers = [
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::UserWarning",
+]
+
+[dependency-groups]
+dev = [
+    "lance>=1.2.1",
+    "pyarrow>=15.0.0",
+    "rich>=14.2.0",
+    "typer>=0.20.0",
 ]
