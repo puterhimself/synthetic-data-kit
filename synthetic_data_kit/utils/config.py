@@ -136,18 +136,27 @@ def get_format_config(config: Dict[str, Any]) -> Dict[str, Any]:
 
 def get_analysis_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """Get analysis configuration"""
-    return config.get('analysis', {
-        'enabled': True,
-        'use_llm': False,
-        'max_chars': 100_000,
-        'keyword_top_k': 15,
-        'categorize': True,
-        'detect_language': True,
-        'detect_pii': False,
-        'cache': True,
-        'default_output': '.sdkit/analysis/report.json',
-        'max_files': None
-    })
+    analysis_config = config.get('analysis', {})
+    
+    # Load default_output from paths.output.analysis if not specified in analysis config
+    default_output = analysis_config.get('default_output')
+    if default_output is None:
+        paths_config = config.get('paths', {})
+        output_paths = paths_config.get('output', {})
+        default_output = output_paths.get('analysis', '.sdkit/analysis/report.json')
+    
+    return {
+        'enabled': analysis_config.get('enabled', True),
+        'use_llm': analysis_config.get('use_llm', False),
+        'max_chars': analysis_config.get('max_chars', 100_000),
+        'keyword_top_k': analysis_config.get('keyword_top_k', 15),
+        'categorize': analysis_config.get('categorize', True),
+        'detect_language': analysis_config.get('detect_language', True),
+        'detect_pii': analysis_config.get('detect_pii', False),
+        'cache': analysis_config.get('cache', True),
+        'default_output': default_output,
+        'max_files': analysis_config.get('max_files', None)
+    }
 
 def get_prompt(config: Dict[str, Any], prompt_name: str) -> str:
     """Get prompt by name"""

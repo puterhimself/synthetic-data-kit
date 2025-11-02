@@ -11,6 +11,7 @@ paths:
     generated: "data/generated" # Stage 2: Where generated QA pairs are saved (create output)
     curated: "data/curated"     # Stage 3: Where curated QA pairs are saved (curate output)
     final: "data/final"         # Stage 4: Where final training formats are saved (save-as output)
+    analysis: "data/analysis/report.json"  # Analysis report output path
 
 # LLM Provider configuration
 llm:
@@ -90,7 +91,6 @@ analysis:
   detect_language: true    # Enable language detection
   detect_pii: false        # Enable PII detection (lightweight regex-based)
   cache: true              # Enable caching of analysis results
-  default_output: ".sdkit/analysis/report.json"  # Default output path for analysis reports
   max_files: null          # Maximum number of files to analyze (null = no limit)
 
 # Prompts for different tasks
