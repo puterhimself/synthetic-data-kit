@@ -134,6 +134,21 @@ def get_format_config(config: Dict[str, Any]) -> Dict[str, Any]:
         'pretty_json': True
     })
 
+def get_analysis_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Get analysis configuration"""
+    return config.get('analysis', {
+        'enabled': True,
+        'use_llm': False,
+        'max_chars': 100_000,
+        'keyword_top_k': 15,
+        'categorize': True,
+        'detect_language': True,
+        'detect_pii': False,
+        'cache': True,
+        'default_output': '.sdkit/analysis/report.json',
+        'max_files': None
+    })
+
 def get_prompt(config: Dict[str, Any], prompt_name: str) -> str:
     """Get prompt by name"""
     prompts = config.get('prompts', {})

@@ -84,6 +84,30 @@ vllm serve meta-llama/Llama-3.3-70B-Instruct --port 8000
 
 The flow follows 4 simple steps: `ingest`, `create`, `curate`, `save-as`. You can process individual files or entire directories. All data is now stored in Lance format by default.
 
+#### Analysis Stage (New)
+
+Before processing files, you can analyze them to extract insights (format, language, keywords, tags, categorization). Analysis runs automatically before `ingest`, `create`, and `curate` commands (can be disabled with `--skip-analysis`).
+
+```bash
+# Analyze a single file or directory
+synthetic-data-kit analyze document.pdf
+synthetic-data-kit analyze ./documents/ --output analysis_report.json
+
+# Analysis options
+synthetic-data-kit analyze ./documents/ --use-llm --max-files 100 --max-chars 50000
+
+# Analysis runs automatically before other commands (configurable)
+synthetic-data-kit ingest ./documents/  # Runs analysis first if enabled in config
+synthetic-data-kit ingest ./documents/ --skip-analysis  # Skip analysis
+```
+
+Analysis outputs a JSON report with:
+- File-level insights: format, language, keywords, tags, summary, category
+- Aggregate statistics: top keywords/tags, category distribution, language distribution
+- Processing metrics: timing, file counts, token counts
+
+#### Main Pipeline
+
 ```bash
 # Check if your backend is running
 synthetic-data-kit system-check

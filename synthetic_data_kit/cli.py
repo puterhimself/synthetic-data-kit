@@ -8,14 +8,17 @@
 import os
 import typer
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 import requests
 from rich.console import Console
 from rich.table import Table
 
-from synthetic_data_kit.utils.config import load_config, get_vllm_config, get_openai_config, get_llm_provider, get_path_config
+from synthetic_data_kit.utils.config import load_config, get_vllm_config, get_openai_config, get_llm_provider, get_path_config, get_analysis_config
 from synthetic_data_kit.core.context import AppContext
 from synthetic_data_kit.server.app import run_server
+from synthetic_data_kit.core.analysis import analyze_path
+from synthetic_data_kit.core.analysis_types import AnalysisOptions
+from synthetic_data_kit.utils.config_types import AnalysisConfig
 
 # Initialize Typer app
 app = typer.Typer(
@@ -27,6 +30,44 @@ console = Console()
 
 # Create app context
 ctx = AppContext()
+
+
+def run_analysis_if_enabled(input_path: str, skip_analysis: bool = False) -> Optional[Dict[str, Any]]:
+    """Run analysis if enabled in config, unless skipped"""
+    if skip_analysis:
+        return None
+    
+    try:
+        analysis_config_dict = get_analysis_config(ctx.config)
+        analysis_config = AnalysisConfig.from_dict(analysis_config_dict)
+        
+        if not analysis_config.enabled:
+            return None
+        
+        # Build options from config
+        options = AnalysisOptions(
+            use_llm=analysis_config.use_llm,
+            max_chars=analysis_config.max_chars,
+            keyword_top_k=analysis_config.keyword_top_k,
+            categorize=analysis_config.categorize,
+            detect_language=analysis_config.detect_language,
+            detect_pii=analysis_config.detect_pii,
+            cache_enabled=analysis_config.cache,
+            output_path=Path(analysis_config.default_output),
+            persist_cache=analysis_config.cache,
+            max_files=analysis_config.max_files
+        )
+        
+        console.print(f"🔍 Running analysis on [bold]{input_path}[/bold]...", style="blue")
+        report = analyze_path(Path(input_path), options, ctx.config)
+        
+        console.print(f"✅ Analysis complete: {report.stats['num_files_analyzed']} files analyzed", style="green")
+        
+        return report.to_dict()
+    except Exception as e:
+        console.print(f"⚠️  Analysis failed: {e}", style="yellow")
+        return None
+
 
 # Define global options
 @app.callback()
@@ -162,6 +203,93 @@ def system_check(
             return 1
 
 
+@app.command("analyze")
+def analyze(
+    input: str = typer.Argument(..., help="File or directory to analyze"),
+    output: Optional[Path] = typer.Option(
+        None, "--output", "-o", help="Output path for analysis report (JSON)"
+    ),
+    use_llm: bool = typer.Option(
+        False, "--use-llm", help="Use LLM for enhanced summaries/tags"
+    ),
+    no_cache: bool = typer.Option(
+        False, "--no-cache", help="Disable caching"
+    ),
+    max_files: Optional[int] = typer.Option(
+        None, "--max-files", help="Maximum number of files to analyze"
+    ),
+    max_chars: Optional[int] = typer.Option(
+        None, "--max-chars", help="Maximum characters to analyze per file"
+    ),
+    skip_analysis: bool = typer.Option(
+        False, "--skip-analysis", help="Skip analysis (no-op, for consistency with other commands)"
+    ),
+):
+    """
+    Analyze files or directories to extract insights (format, language, keywords, tags, etc.).
+    
+    Outputs a JSON report with analysis results. Can be used standalone or before other commands.
+    
+    Examples:
+    - synthetic-data-kit analyze document.pdf
+    - synthetic-data-kit analyze ./documents/ --output report.json
+    - synthetic-data-kit analyze ./documents/ --use-llm --max-files 100
+    """
+    if skip_analysis:
+        console.print("Skipping analysis (--skip-analysis flag)", style="yellow")
+        return 0
+    
+    try:
+        # Load analysis config
+        analysis_config_dict = get_analysis_config(ctx.config)
+        analysis_config = AnalysisConfig.from_dict(analysis_config_dict)
+        
+        # Build options from config and CLI overrides
+        options = AnalysisOptions(
+            use_llm=use_llm or analysis_config.use_llm,
+            max_chars=max_chars or analysis_config.max_chars,
+            keyword_top_k=analysis_config.keyword_top_k,
+            categorize=analysis_config.categorize,
+            detect_language=analysis_config.detect_language,
+            detect_pii=analysis_config.detect_pii,
+            cache_enabled=not no_cache and analysis_config.cache,
+            output_path=Path(output) if output else Path(analysis_config.default_output),
+            persist_cache=True,
+            max_files=max_files or analysis_config.max_files
+        )
+        
+        # Run analysis
+        console.print(f"Analyzing: [bold]{input}[/bold]", style="blue")
+        report = analyze_path(Path(input), options, ctx.config)
+        
+        # Save report
+        if options.output_path:
+            report.save(options.output_path)
+            console.print(f"✅ Analysis report saved to [bold]{options.output_path}[/bold]", style="green")
+        else:
+            # Output to stdout
+            console.print("\n" + "="*50, style="bold")
+            console.print("Analysis Report:", style="bold blue")
+            console.print(report.to_json())
+        
+        # Show summary
+        console.print("\n" + "="*50, style="bold")
+        console.print(f"Summary:", style="bold blue")
+        console.print(f"Files analyzed: {report.stats['num_files_analyzed']}")
+        console.print(f"Total time: {report.stats['total_time_ms']:.2f}ms")
+        console.print(f"Total chars: {report.stats['total_chars']:,}")
+        console.print(f"Total tokens: {report.stats['total_tokens']:,}")
+        if report.aggregate.get('top_keywords'):
+            console.print(f"Top keywords: {', '.join(report.aggregate['top_keywords'][:10])}")
+        console.print("="*50, style="bold")
+        
+        return 0
+        
+    except Exception as e:
+        console.print(f"❌ Error: {e}", style="red")
+        return 1
+
+
 @app.command()
 def ingest(
     input: str = typer.Argument(..., help="File, URL, or directory to parse"),
@@ -180,6 +308,9 @@ def ingest(
     multimodal: bool = typer.Option(
         False, "--multimodal", help="Enable multimodal parsing for supported file types"
     ),
+    skip_analysis: bool = typer.Option(
+        False, "--skip-analysis", help="Skip automatic analysis stage"
+    ),
 ):
     """
     Parse documents (PDF, HTML, YouTube, DOCX, PPT, TXT, images) into clean text.
@@ -194,6 +325,9 @@ def ingest(
     from synthetic_data_kit.core.ingest import process_file
     from synthetic_data_kit.utils.directory_processor import is_directory, process_directory_ingest
     
+    # Run analysis if enabled
+    run_analysis_if_enabled(input, skip_analysis)
+    
     # Get output directory from args, then config, then default
     if output_dir is None:
         output_dir = get_path_config(ctx.config, "output", "parsed")
@@ -207,6 +341,7 @@ def ingest(
             
             # Preview mode - show files without processing
             if preview:
+                # Skip analysis in preview mode
                 from synthetic_data_kit.utils.directory_processor import get_directory_stats, INGEST_EXTENSIONS
                 
                 console.print(f"Preview: scanning directory [bold]{input}[/bold]", style="blue")
@@ -305,6 +440,9 @@ def create(
     preview: bool = typer.Option(
         False, "--preview", help="Preview files to be processed without actually processing them"
     ),
+    skip_analysis: bool = typer.Option(
+        False, "--skip-analysis", help="Skip automatic analysis stage"
+    ),
 ):
     """
     Generate content from text using local LLM inference.
@@ -328,6 +466,10 @@ def create(
     import os
     from synthetic_data_kit.core.create import process_file
     from synthetic_data_kit.utils.directory_processor import is_directory, process_directory_create, get_directory_stats, CREATE_EXTENSIONS
+    
+    # Run analysis if enabled (skip in preview mode)
+    if not preview:
+        run_analysis_if_enabled(input, skip_analysis)
     
     # Check the LLM provider from config
     provider = get_llm_provider(ctx.config)
@@ -474,6 +616,9 @@ def curate(
     preview: bool = typer.Option(
         False, "--preview", help="Preview files to be processed without actually processing them"
     ),
+    skip_analysis: bool = typer.Option(
+        False, "--skip-analysis", help="Skip automatic analysis stage"
+    ),
 ):
     """
     Clean and filter content based on quality.
@@ -487,6 +632,10 @@ def curate(
     import os
     from synthetic_data_kit.core.curate import curate_qa_pairs
     from synthetic_data_kit.utils.directory_processor import is_directory, process_directory_curate, get_directory_stats, CURATE_EXTENSIONS
+    
+    # Run analysis if enabled (skip in preview mode)
+    if not preview:
+        run_analysis_if_enabled(input, skip_analysis)
     
     # Check the LLM provider from config
     provider = get_llm_provider(ctx.config)

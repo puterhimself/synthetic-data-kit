@@ -80,6 +80,19 @@ format:
   include_metadata: true  # Include metadata in output files
   pretty_json: true  # Use indentation in JSON output
 
+# Analysis stage configuration
+analysis:
+  enabled: true              # Enable automatic analysis before flows
+  use_llm: false            # Use LLM for enhanced summaries/tags (slower, more accurate)
+  max_chars: 100000         # Maximum characters to analyze per file
+  keyword_top_k: 15         # Number of top keywords to extract
+  categorize: true         # Enable file categorization
+  detect_language: true    # Enable language detection
+  detect_pii: false        # Enable PII detection (lightweight regex-based)
+  cache: true              # Enable caching of analysis results
+  default_output: ".sdkit/analysis/report.json"  # Default output path for analysis reports
+  max_files: null          # Maximum number of files to analyze (null = no limit)
+
 # Prompts for different tasks
 prompts:
   # Summary generation prompt
