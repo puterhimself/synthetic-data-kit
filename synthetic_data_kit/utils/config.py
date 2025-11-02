@@ -158,6 +158,10 @@ def get_analysis_config(config: Dict[str, Any]) -> Dict[str, Any]:
         'max_files': analysis_config.get('max_files', None)
     }
 
+def get_plan_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Get planning configuration"""
+    return config.get('planning', {})
+
 def get_prompt(config: Dict[str, Any], prompt_name: str) -> str:
     """Get prompt by name"""
     prompts = config.get('prompts', {})

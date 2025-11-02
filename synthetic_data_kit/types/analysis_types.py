@@ -43,6 +43,14 @@ class FileAnalysis:
     truncated: bool = False
     llm_used: bool = False
     
+    # Extended analysis fields
+    coverage: Optional[str] = None  # Coverage label (domain/topic)
+    difficulty: Optional[float] = None  # Readability/difficulty score (0-10)
+    safety_warnings: List[str] = field(default_factory=list)  # PII, policy violations
+    tone: Optional[str] = None  # Tone (formal, casual, technical, etc.)
+    register: Optional[str] = None  # Register (academic, business, etc.)
+    duplicate_signature: Optional[str] = None  # MinHash signature for dedup
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         result = asdict(self)

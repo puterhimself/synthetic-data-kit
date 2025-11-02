@@ -92,6 +92,90 @@ analysis:
   detect_pii: false        # Enable PII detection (lightweight regex-based)
   cache: true              # Enable caching of analysis results
   max_files: null          # Maximum number of files to analyze (null = no limit)
+  
+  # Extended analysis features
+  coverage:
+    enabled: true           # Enable coverage labeling (keyword rules + LLM fallback)
+    keyword_rules: {}       # Custom keyword rules for coverage (domain-specific)
+    llm_fallback: true      # Use LLM when keyword rules don't match
+  
+  difficulty:
+    enabled: true           # Enable difficulty analysis
+    readability_bands: true # Use readability bands (e.g., Flesch-Kincaid)
+    judge_score: false      # Optional LLM judge score for difficulty
+  
+  safety:
+    enabled: true           # Enable safety checks
+    pii_detection: true     # Detect PII (email, phone, SSN, etc.)
+    policy_matching: false  # Match against policy/blocklist
+    blocklist: []           # List of blocked terms/patterns
+  
+  style:
+    enabled: true           # Enable style analysis
+    tone_detection: true    # Detect tone (formal, casual, technical, etc.)
+    register_detection: true # Detect register (academic, business, etc.)
+  
+  dedup:
+    enabled: true           # Enable duplicate detection
+    minhash_lsh: true       # Use MinHash LSH for fast duplicate detection
+    embedding_tiebreak: true # Use embeddings for tie-breaking (cosine >= 0.92)
+    threshold: 0.92         # Cosine similarity threshold for duplicates
+
+# Planning stage configuration
+planning:
+  dataset_goal: null        # Goal description for the dataset (e.g., "high-quality QA pairs for fine-tuning")
+  
+  # Mix quotas (what types of content to generate)
+  mix_quotas:
+    qa: 0.7                 # 70% QA pairs
+    cot: 0.2                # 20% Chain of Thought
+    summary: 0.1            # 10% Summaries
+  
+  # Coverage targets
+  coverage_targets:
+    domains: []             # Target domains (e.g., ["technical", "general"])
+    topics: []               # Target topics/keywords
+  
+  # Difficulty targets
+  difficulty_targets:
+    min_difficulty: 3        # Minimum difficulty (1-10)
+    max_difficulty: 8        # Maximum difficulty (1-10)
+    distribution: "balanced" # "easy", "balanced", "hard"
+  
+  # Style targets
+  style_targets:
+    tones: []                # Target tones (e.g., ["formal", "technical"])
+    registers: []            # Target registers (e.g., ["academic", "business"])
+  
+  # Sampling strategy
+  sampler:
+    strategy: "balanced"     # "balanced", "weighted", "random"
+    weights: {}              # Custom weights per file/domain
+  
+  # Prompt configuration
+  prompts:
+    families: []             # Prompt family names to rotate
+    rotation: "round-robin"  # "round-robin", "random", "weighted"
+    per_task_overrides: {}  # Per-task prompt overrides
+  
+  # Safety and dedup rules
+  safety_rules:
+    enforce_pii_filter: true
+    enforce_blocklist: true
+  
+  dedup_rules:
+    pre_check: true          # Check for duplicates before generation
+    post_check: true         # Check for duplicates after generation
+  
+  # Quality gates
+  gates:
+    min_quality: 7.0          # Minimum quality threshold (1-10)
+    min_coverage: 0.5        # Minimum coverage score (0-1)
+  
+  # Budget constraints
+  budget:
+    max_examples: null       # Maximum number of examples to generate (null = no limit)
+    max_tokens: null         # Maximum tokens to use (null = no limit)
 
 # Prompts for different tasks
 prompts:

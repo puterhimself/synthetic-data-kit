@@ -17,6 +17,28 @@ from synthetic_data_kit.utils.text import split_into_chunks
 from synthetic_data_kit.utils.llm_processing import parse_qa_pairs, parse_ratings, convert_to_conversation_format
 from synthetic_data_kit.utils.config import load_config, get_generation_config, get_curate_config, get_prompt
 
+class PromptComponents:
+    """Structured components for prompt templates"""
+    def __init__(self):
+        self.taskContext: Optional[str] = None
+        self.toneContext: Optional[str] = None
+        self.backgroundData: Optional[str] = None
+        self.examples: Optional[str] = None
+        self.finalRequest: Optional[str] = None
+        self.outputFormatting: Optional[str] = None
+    
+    def to_dict(self) -> Dict[str, Optional[str]]:
+        """Convert to dictionary for template formatting"""
+        return {
+            'taskContext': self.taskContext or '',
+            'toneContext': self.toneContext or '',
+            'backgroundData': self.backgroundData or '',
+            'examples': self.examples or '',
+            'finalRequest': self.finalRequest or '',
+            'outputFormatting': self.outputFormatting or ''
+        }
+
+
 class QAGenerator:
     def __init__(self, 
                  client: LLMClient,
@@ -30,6 +52,9 @@ class QAGenerator:
         # Get specific configurations
         self.generation_config = get_generation_config(self.config)
         self.curate_config = get_curate_config(self.config)
+        
+        # Prompt family for rotation
+        self.prompt_family: Optional[str] = None
     
     def generate_summary(self, 
                          document_text: str, 
@@ -110,17 +135,49 @@ class QAGenerator:
         pairs_per_chunk = max(1, round(num_pairs / len(chunks)))
         
         # Get QA generation prompt template
-        qa_prompt_template = get_prompt(self.config, "qa_generation")
+        prompt_name = "qa_generation"
+        # Use prompt family override if specified
+        if self.prompt_family:
+            family_prompt_name = f"{prompt_name}_{self.prompt_family}"
+            try:
+                qa_prompt_template = get_prompt(self.config, family_prompt_name)
+            except ValueError:
+                # Fallback to default if family prompt doesn't exist
+                qa_prompt_template = get_prompt(self.config, prompt_name)
+        else:
+            qa_prompt_template = get_prompt(self.config, prompt_name)
+        
+        # Build prompt components
+        prompt_components = PromptComponents()
+        prompt_components.taskContext = f"Generate {pairs_per_chunk} question-answer pairs from the text."
+        prompt_components.backgroundData = summary[:200] if summary else None
+        prompt_components.outputFormatting = "Return JSON format: [{\"question\": \"...\", \"answer\": \"...\"}]"
+        
+        # Get tone/register context if available (would come from plan)
+        # For now, leave empty but allow injection
+        prompt_components.toneContext = None
+        
+        # Format prompt components into template
+        components_dict = prompt_components.to_dict()
         
         # Prepare all message batches
         all_messages = []
         for i, chunk in enumerate(chunks):
-            # Format the prompt with summary and text
-            qa_prompt = qa_prompt_template.format(
-                num_pairs=pairs_per_chunk,
-                summary=summary[:100],
-                text=chunk
-            )
+            # Format the prompt with summary, text, and components
+            try:
+                qa_prompt = qa_prompt_template.format(
+                    num_pairs=pairs_per_chunk,
+                    summary=summary[:100] if summary else '',
+                    text=chunk,
+                    **components_dict
+                )
+            except KeyError:
+                # Fallback if template doesn't use all components
+                qa_prompt = qa_prompt_template.format(
+                    num_pairs=pairs_per_chunk,
+                    summary=summary[:100] if summary else '',
+                    text=chunk
+                )
             
             messages = [
                 {"role": "system", "content": qa_prompt}

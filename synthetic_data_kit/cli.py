@@ -13,12 +13,14 @@ import requests
 from rich.console import Console
 from rich.table import Table
 
-from synthetic_data_kit.utils.config import load_config, get_vllm_config, get_openai_config, get_llm_provider, get_path_config, get_analysis_config
+from synthetic_data_kit.utils.config import load_config, get_vllm_config, get_openai_config, get_llm_provider, get_path_config, get_analysis_config, get_plan_config
 from synthetic_data_kit.core.context import AppContext
 from synthetic_data_kit.server.app import run_server
 from synthetic_data_kit.core.analysis import analyze_path
-from synthetic_data_kit.core.analysis_types import AnalysisOptions
+from synthetic_data_kit.types.analysis_types import AnalysisOptions
 from synthetic_data_kit.utils.config_types import AnalysisConfig
+from synthetic_data_kit.core.plan import build_plan
+from synthetic_data_kit.types.planning_types import PlanSpec
 
 # Initialize Typer app
 app = typer.Typer(
@@ -410,6 +412,31 @@ def ingest(
         return 1
 
 
+@app.command("plan")
+def plan_cmd(
+    analysis: Path = typer.Option(..., "--analysis", "-a", help="Path to analysis.json report"),
+    output: Path = typer.Option("data/analysis/plan.json", "--output", "-o", help="Output path for plan.json"),
+    config: Optional[Path] = typer.Option(None, "--config", "-c", help="Path to planning config (uses main config if not specified)")
+):
+    """
+    Build a generation plan from analysis results and planning configuration.
+    
+    Examples:
+    - synthetic-data-kit plan --analysis report.json -o plan.json
+    - synthetic-data-kit plan -a analysis.json -c planning.yaml -o plan.json
+    """
+    try:
+        cfg = load_config(config or ctx.config_path)
+        spec = build_plan(analysis, cfg)
+        spec.save(output)
+        console.print(f"✅ Plan saved to {output}", style="green")
+        console.print(f"   Generated plans for {len(spec.file_plans)} files", style="blue")
+        return 0
+    except Exception as e:
+        console.print(f"❌ Error: {e}", style="red")
+        return 1
+
+
 @app.command()
 def create(
     input: str = typer.Argument(..., help="File or directory to process"),
@@ -443,6 +470,12 @@ def create(
     skip_analysis: bool = typer.Option(
         False, "--skip-analysis", help="Skip automatic analysis stage"
     ),
+    plan: Optional[Path] = typer.Option(
+        None, "--plan", help="Path to plan.json file (enables plan-driven generation)"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be generated without actually generating"
+    ),
 ):
     """
     Generate content from text using local LLM inference.
@@ -450,6 +483,7 @@ def create(
     Can process:
     - Single file: synthetic-data-kit create document.txt --type qa
     - Directory: synthetic-data-kit create ./processed-text/ --type qa
+    - With plan: synthetic-data-kit create ./input/ --plan plan.json
     
     Content types:
     - qa: Generate question-answer pairs from .txt files (use --num-pairs to specify how many)
@@ -462,13 +496,28 @@ def create(
        - A single conversation in 'conversations' field
        - An array of conversation objects, each with a 'conversations' field
        - A direct array of conversation messages)
+    
+    When --plan is provided, generation follows the plan.json specifications for quotas, prompts, and gates.
+    Use --dry-run to preview what would be generated without actually generating.
     """
     import os
     from synthetic_data_kit.core.create import process_file
     from synthetic_data_kit.utils.directory_processor import is_directory, process_directory_create, get_directory_stats, CREATE_EXTENSIONS
     
-    # Run analysis if enabled (skip in preview mode)
-    if not preview:
+    # Handle plan-driven generation
+    plan_spec = None
+    if plan:
+        try:
+            plan_spec = PlanSpec.load(plan)
+            console.print(f"📋 Using plan: {plan}", style="blue")
+            if dry_run:
+                console.print("🔍 DRY RUN mode: showing what would be generated", style="yellow")
+        except Exception as e:
+            console.print(f"❌ Error loading plan: {e}", style="red")
+            return 1
+    
+    # Run analysis if enabled (skip in preview mode or dry run)
+    if not preview and not dry_run:
         run_analysis_if_enabled(input, skip_analysis)
     
     # Check the LLM provider from config
@@ -557,7 +606,9 @@ def create(
                 verbose=verbose,
                 provider=provider,
                 chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap
+                chunk_overlap=chunk_overlap,
+                plan=plan_spec,
+                dry_run=dry_run,
             )
             
             # Return appropriate exit code
@@ -572,6 +623,15 @@ def create(
             if preview:
                 console.print("Preview mode is only available for directories. Processing single file...", style="yellow")
             
+            # Find matching file plan if using plan
+            file_plan = None
+            if plan_spec:
+                input_path_str = str(Path(input).resolve())
+                for fp in plan_spec.file_plans:
+                    if str(Path(fp.file_path).resolve()) == input_path_str:
+                        file_plan = fp
+                        break
+            
             with console.status(f"Generating {content_type} content from {input}..."):
                 output_path = process_file(
                     input,
@@ -584,15 +644,54 @@ def create(
                     verbose,
                     provider=provider,
                     chunk_size=chunk_size,
-                    chunk_overlap=chunk_overlap
+                    chunk_overlap=chunk_overlap,
+                    plan=plan_spec,
+                    file_plan=file_plan,
+                    dry_run=dry_run
                 )
             if output_path:
                 console.print(f"✅ Content saved to [bold]{output_path}[/bold]", style="green")
+            elif dry_run:
+                console.print("✅ Dry run complete", style="green")
             return 0
             
     except Exception as e:
         console.print(f"❌ Error: {e}", style="red")
         return 1
+
+
+@app.command("generate")
+def generate(
+    input: str = typer.Argument(..., help="File or directory to process"),
+    plan: Path = typer.Option(..., "--plan", "-p", help="Path to plan.json file"),
+    output_dir: Optional[Path] = typer.Option(
+        None, "--output-dir", "-o", help="Where to save the output"
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be generated without actually generating"
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show detailed output"
+    ),
+):
+    """
+    Generate content using a plan (alias for create --plan).
+    
+    This is a convenience command that calls create with --plan.
+    
+    Examples:
+    - synthetic-data-kit generate ./input/ --plan plan.json
+    - synthetic-data-kit generate ./input/ --plan plan.json --dry-run
+    """
+    # Call create with plan
+    return create(
+        input=input,
+        plan=plan,
+        output_dir=output_dir,
+        dry_run=dry_run,
+        verbose=verbose,
+        skip_analysis=True  # Skip analysis since plan was already built from analysis
+    )
 
 
 @app.command("curate")

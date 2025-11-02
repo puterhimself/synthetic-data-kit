@@ -214,3 +214,128 @@ def analyze_text_quality(text: str) -> List[str]:
     
     return warnings
 
+
+def compute_readability_score(text: str) -> float:
+    """Compute a simple readability score (0-10 scale).
+    
+    Simple heuristic based on:
+    - Average sentence length
+    - Average word length
+    - Syllable count (approximated)
+    
+    Returns:
+        Readability score (0-10, higher = more difficult)
+    """
+    if not text or len(text.strip()) == 0:
+        return 5.0
+    
+    # Split into sentences
+    sentences = re.split(r'[.!?]+', text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+    
+    if not sentences:
+        return 5.0
+    
+    # Count words
+    words = re.findall(r'\b\w+\b', text.lower())
+    if not words:
+        return 5.0
+    
+    # Compute metrics
+    avg_sentence_length = len(words) / len(sentences) if sentences else 0
+    avg_word_length = sum(len(w) for w in words) / len(words) if words else 0
+    
+    # Approximate syllables (simple heuristic: count vowel groups)
+    def count_syllables(word):
+        word = word.lower()
+        if len(word) <= 3:
+            return 1
+        vowels = 'aeiouy'
+        count = 0
+        prev_was_vowel = False
+        for char in word:
+            is_vowel = char in vowels
+            if is_vowel and not prev_was_vowel:
+                count += 1
+            prev_was_vowel = is_vowel
+        # Adjust for silent e
+        if word.endswith('e'):
+            count -= 1
+        return max(1, count)
+    
+    avg_syllables = sum(count_syllables(w) for w in words) / len(words) if words else 0
+    
+    # Compute readability score (simplified Flesch-like)
+    # Higher values = more difficult
+    difficulty = (
+        (avg_sentence_length / 20.0) * 3.0 +  # Sentence length component
+        (avg_word_length / 6.0) * 2.0 +       # Word length component
+        (avg_syllables / 2.0) * 5.0           # Syllable component
+    )
+    
+    # Normalize to 0-10 scale
+    score = min(10.0, max(0.0, difficulty))
+    return round(score, 1)
+
+
+def detect_tone(text: str) -> Optional[str]:
+    """Detect tone of text using heuristics.
+    
+    Returns:
+        Tone label (e.g., "formal", "casual", "technical", "conversational")
+    """
+    text_lower = text.lower()
+    
+    # Formal indicators
+    formal_words = ['therefore', 'furthermore', 'moreover', 'consequently', 'hence', 'thus']
+    formal_count = sum(1 for word in formal_words if word in text_lower)
+    
+    # Casual indicators
+    casual_words = ['hey', 'gonna', 'wanna', 'yeah', 'okay', 'cool', 'awesome']
+    casual_count = sum(1 for word in casual_words if word in text_lower)
+    
+    # Technical indicators
+    technical_words = ['algorithm', 'implementation', 'function', 'variable', 'parameter', 'method']
+    technical_count = sum(1 for word in technical_words if word in text_lower)
+    
+    # Conversational indicators
+    conversational_words = ['you', 'your', 'we', 'our', 'let\'s', 'think about']
+    conversational_count = sum(1 for word in conversational_words if word in text_lower)
+    
+    # Determine tone
+    if technical_count > 3:
+        return 'technical'
+    elif formal_count > casual_count and formal_count > 1:
+        return 'formal'
+    elif casual_count > 0:
+        return 'casual'
+    elif conversational_count > 5:
+        return 'conversational'
+    
+    return 'neutral'
+
+
+def detect_register(text: str) -> Optional[str]:
+    """Detect register of text using heuristics.
+    
+    Returns:
+        Register label (e.g., "academic", "business", "informal")
+    """
+    text_lower = text.lower()
+    
+    # Academic indicators
+    academic_words = ['research', 'study', 'analysis', 'hypothesis', 'methodology', 'findings']
+    academic_count = sum(1 for word in academic_words if word in text_lower)
+    
+    # Business indicators
+    business_words = ['revenue', 'profit', 'customer', 'market', 'strategy', 'business']
+    business_count = sum(1 for word in business_words if word in text_lower)
+    
+    # Determine register
+    if academic_count > 2:
+        return 'academic'
+    elif business_count > 2:
+        return 'business'
+    
+    return 'general'
+

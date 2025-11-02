@@ -5,4 +5,8 @@
 # the root directory of this source tree.
 # Main section that handles the commands
 from synthetic_data_kit.core.context import AppContext
-from synthetic_data_kit.core.analysis_types import AnalysisOptions, FileAnalysis, AnalysisReport
+from synthetic_data_kit.types.analysis_types import (
+    AnalysisOptions,
+    FileAnalysis,
+    AnalysisReport,
+)

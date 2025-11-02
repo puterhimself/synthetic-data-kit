@@ -11,6 +11,8 @@ from typing import List, Dict, Any, Optional, Callable
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, TimeElapsedColumn
 
+from synthetic_data_kit.types.planning_types import PlanSpec, FilePlan
+
 console = Console()
 
 # Supported file extensions for each command
@@ -223,6 +225,8 @@ def process_directory_create(
     provider: Optional[str] = None,
     chunk_size: Optional[int] = None,
     chunk_overlap: Optional[int] = None,
+    plan: Optional[PlanSpec] = None,
+    dry_run: bool = False,
 ) -> Dict[str, Any]:
     """Process all supported files in directory for content creation
     
@@ -236,6 +240,8 @@ def process_directory_create(
         num_pairs: Target number of QA pairs or examples
         verbose: Show detailed progress
         provider: LLM provider to use
+        plan: Optional plan specification to drive generation
+        dry_run: When True, report planned work without generating outputs
     
     Returns:
         Dictionary with processing results
@@ -271,6 +277,14 @@ def process_directory_create(
         }
     
     console.print(f"Found {len(supported_files)} {content_type} files to process", style="blue")
+
+    # Prepare plan lookup for quick access
+    plan_lookup: Dict[str, FilePlan] = {}
+    if plan and plan.file_plans:
+        plan_lookup = {
+            str(Path(file_plan.file_path).resolve()): file_plan
+            for file_plan in plan.file_plans
+        }
     
     # Initialize results tracking
     results = {
@@ -298,6 +312,12 @@ def process_directory_create(
             filename = os.path.basename(file_path)
             
             try:
+                # Determine per-file plan
+                file_plan: Optional[FilePlan] = None
+                if plan_lookup:
+                    resolved_path = str(Path(file_path).resolve())
+                    file_plan = plan_lookup.get(resolved_path)
+
                 # Process individual file
                 output_path = process_file(
                     file_path,
@@ -310,22 +330,52 @@ def process_directory_create(
                     verbose,
                     provider=provider,
                     chunk_size=chunk_size,
-                    chunk_overlap=chunk_overlap
+                    chunk_overlap=chunk_overlap,
+                    plan=plan,
+                    file_plan=file_plan,
+                    dry_run=dry_run,
                 )
                 
                 # Record success
                 results["successful"] += 1
-                results["results"].append({
+                result_entry = {
                     "input_file": file_path,
                     "output_file": output_path,
                     "content_type": content_type,
-                    "status": "success"
-                })
-                
+                    "status": "dry-run" if dry_run else "success",
+                }
+
+                if file_plan:
+                    result_entry["plan"] = {
+                        "num_qa": file_plan.num_qa,
+                        "num_cot": file_plan.num_cot,
+                        "num_summary": file_plan.num_summary,
+                        "prompt_family": file_plan.prompt_family,
+                    }
+
+                results["results"].append(result_entry)
+
                 if verbose:
-                    console.print(f"✓ Generated {content_type} from {filename} -> {os.path.basename(output_path)}", style="green")
+                    if dry_run:
+                        console.print(
+                            f"↻ Planned {content_type} for {filename}",
+                            style="cyan",
+                        )
+                    elif output_path:
+                        console.print(
+                            f"✓ Generated {content_type} from {filename} -> {os.path.basename(output_path)}",
+                            style="green",
+                        )
+                    else:
+                        console.print(
+                            f"✓ Generated {content_type} from {filename}",
+                            style="green",
+                        )
                 else:
-                    console.print(f"✓ {filename}", style="green")
+                    if dry_run:
+                        console.print(f"↻ {filename} (dry run)", style="cyan")
+                    else:
+                        console.print(f"✓ {filename}", style="green")
                 
             except Exception as e:
                 # Record failure
