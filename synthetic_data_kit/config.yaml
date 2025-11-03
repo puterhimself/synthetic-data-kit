@@ -12,6 +12,7 @@ paths:
     curated: "data/curated"     # Stage 3: Where curated QA pairs are saved (curate output)
     final: "data/final"         # Stage 4: Where final training formats are saved (save-as output)
     analysis: "data/analysis/report.json"  # Analysis report output path
+    plan: "data/analysis/plan.json"            # Plan output path
 
 # LLM Provider configuration
 llm:

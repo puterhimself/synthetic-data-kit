@@ -26,7 +26,7 @@ from synthetic_data_kit.core.context import AppContext
 from synthetic_data_kit.server.app import run_server
 from synthetic_data_kit.core.analysis import analyze_path
 from synthetic_data_kit.types.analysis_types import AnalysisOptions
-from synthetic_data_kit.utils.config_types import AnalysisConfig
+from synthetic_data_kit.types.config_types import AnalysisConfig
 from synthetic_data_kit.core.plan import build_plan
 from synthetic_data_kit.types.planning_types import PlanSpec
 
