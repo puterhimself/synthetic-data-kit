@@ -77,7 +77,7 @@ def determine_parser(file_path: str, config: Dict[str, Any], multimodal: bool = 
             ".pptx": PPTParser(),
             ".txt": TXTParser(),
         }
-        
+
         # Image files always use ImageParser (which returns multimodal format)
         if ext in ImageParser.SUPPORTED_EXTENSIONS:
             return ImageParser()
@@ -111,6 +111,7 @@ def process_file(
     """
     from synthetic_data_kit.utils.lance_utils import create_lance_dataset
     import pyarrow as pa
+
     # Create output directory if it doesn't exist
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
@@ -129,6 +130,7 @@ def process_file(
     # Convert base64 image strings to binary if needed (for ImageParser compatibility)
     if has_images:
         import base64
+
         for item in content:
             if isinstance(item, dict) and "image" in item and item["image"]:
                 # If image is a string (base64), convert to binary
@@ -163,14 +165,12 @@ def process_file(
     output_name += ".lance"
     output_path = os.path.join(output_dir, output_name)
 
-    schema = pa.schema([
-        pa.field("text", pa.string()),
-        pa.field("image", pa.binary())
-    ]) if use_multimodal_schema else pa.schema([
-        pa.field("text", pa.string())
-    ])
+    schema = (
+        pa.schema([pa.field("text", pa.string()), pa.field("image", pa.binary())])
+        if use_multimodal_schema
+        else pa.schema([pa.field("text", pa.string())])
+    )
 
     create_lance_dataset(content, output_path, schema=schema)
-
 
     return output_path

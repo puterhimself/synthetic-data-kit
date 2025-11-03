@@ -11,6 +11,7 @@ from typing import Optional
 @dataclass
 class AnalysisConfig:
     """Configuration for analysis stage"""
+
     enabled: bool = True
     use_llm: bool = False
     max_chars: int = 100_000
@@ -21,20 +22,19 @@ class AnalysisConfig:
     cache: bool = True
     default_output: str = ".sdkit/analysis/report.json"
     max_files: Optional[int] = None
-    
+
     @classmethod
-    def from_dict(cls, config_dict: dict) -> 'AnalysisConfig':
+    def from_dict(cls, config_dict: dict) -> "AnalysisConfig":
         """Create AnalysisConfig from dictionary"""
         return cls(
-            enabled=config_dict.get('enabled', True),
-            use_llm=config_dict.get('use_llm', False),
-            max_chars=config_dict.get('max_chars', 100_000),
-            keyword_top_k=config_dict.get('keyword_top_k', 15),
-            categorize=config_dict.get('categorize', True),
-            detect_language=config_dict.get('detect_language', True),
-            detect_pii=config_dict.get('detect_pii', False),
-            cache=config_dict.get('cache', True),
-            default_output=config_dict.get('default_output', '.sdkit/analysis/report.json'),
-            max_files=config_dict.get('max_files', None)
+            enabled=config_dict.get("enabled", True),
+            use_llm=config_dict.get("use_llm", False),
+            max_chars=config_dict.get("max_chars", 100_000),
+            keyword_top_k=config_dict.get("keyword_top_k", 15),
+            categorize=config_dict.get("categorize", True),
+            detect_language=config_dict.get("detect_language", True),
+            detect_pii=config_dict.get("detect_pii", False),
+            cache=config_dict.get("cache", True),
+            default_output=config_dict.get("default_output", ".sdkit/analysis/report.json"),
+            max_files=config_dict.get("max_files", None),
         )
-

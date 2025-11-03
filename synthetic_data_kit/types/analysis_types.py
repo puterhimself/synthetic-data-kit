@@ -13,6 +13,7 @@ import json
 @dataclass
 class AnalysisOptions:
     """Options for controlling analysis behavior"""
+
     use_llm: bool = False
     max_chars: int = 100_000
     keyword_top_k: int = 15
@@ -28,6 +29,7 @@ class AnalysisOptions:
 @dataclass
 class FileAnalysis:
     """Analysis results for a single file"""
+
     path: Path
     format: str
     language: Optional[str] = None
@@ -42,7 +44,7 @@ class FileAnalysis:
     analysis_time_ms: float = 0.0
     truncated: bool = False
     llm_used: bool = False
-    
+
     # Extended analysis fields
     coverage: Optional[str] = None  # Coverage label (domain/topic)
     difficulty: Optional[float] = None  # Readability/difficulty score (0-10)
@@ -50,38 +52,38 @@ class FileAnalysis:
     tone: Optional[str] = None  # Tone (formal, casual, technical, etc.)
     register: Optional[str] = None  # Register (academic, business, etc.)
     duplicate_signature: Optional[str] = None  # MinHash signature for dedup
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         result = asdict(self)
-        result['path'] = str(self.path)
+        result["path"] = str(self.path)
         return result
 
 
 @dataclass
 class AnalysisReport:
     """Complete analysis report for a path (file or directory)"""
+
     root: Path
     files: List[FileAnalysis]
     aggregate: Dict[str, Any] = field(default_factory=dict)
     stats: Dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
-            'root': str(self.root),
-            'files': [f.to_dict() for f in self.files],
-            'aggregate': self.aggregate,
-            'stats': self.stats
+            "root": str(self.root),
+            "files": [f.to_dict() for f in self.files],
+            "aggregate": self.aggregate,
+            "stats": self.stats,
         }
-    
+
     def to_json(self, indent: int = 2) -> str:
         """Convert to JSON string"""
         return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
-    
+
     def save(self, output_path: Path) -> None:
         """Save report to JSON file"""
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, 'w', encoding='utf-8') as f:
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(self.to_json())
-

@@ -13,7 +13,15 @@ import requests
 from rich.console import Console
 from rich.table import Table
 
-from synthetic_data_kit.utils.config import load_config, get_vllm_config, get_openai_config, get_llm_provider, get_path_config, get_analysis_config, get_plan_config
+from synthetic_data_kit.utils.config import (
+    load_config,
+    get_vllm_config,
+    get_openai_config,
+    get_llm_provider,
+    get_path_config,
+    get_analysis_config,
+    get_plan_config,
+)
 from synthetic_data_kit.core.context import AppContext
 from synthetic_data_kit.server.app import run_server
 from synthetic_data_kit.core.analysis import analyze_path
@@ -34,18 +42,20 @@ console = Console()
 ctx = AppContext()
 
 
-def run_analysis_if_enabled(input_path: str, skip_analysis: bool = False) -> Optional[Dict[str, Any]]:
+def run_analysis_if_enabled(
+    input_path: str, skip_analysis: bool = False
+) -> Optional[Dict[str, Any]]:
     """Run analysis if enabled in config, unless skipped"""
     if skip_analysis:
         return None
-    
+
     try:
         analysis_config_dict = get_analysis_config(ctx.config)
         analysis_config = AnalysisConfig.from_dict(analysis_config_dict)
-        
+
         if not analysis_config.enabled:
             return None
-        
+
         # Build options from config
         options = AnalysisOptions(
             use_llm=analysis_config.use_llm,
@@ -57,14 +67,17 @@ def run_analysis_if_enabled(input_path: str, skip_analysis: bool = False) -> Opt
             cache_enabled=analysis_config.cache,
             output_path=Path(analysis_config.default_output),
             persist_cache=analysis_config.cache,
-            max_files=analysis_config.max_files
+            max_files=analysis_config.max_files,
         )
-        
+
         console.print(f"🔍 Running analysis on [bold]{input_path}[/bold]...", style="blue")
         report = analyze_path(Path(input_path), options, ctx.config)
-        
-        console.print(f"✅ Analysis complete: {report.stats['num_files_analyzed']} files analyzed", style="green")
-        
+
+        console.print(
+            f"✅ Analysis complete: {report.stats['num_files_analyzed']} files analyzed",
+            style="green",
+        )
+
         return report.to_dict()
     except Exception as e:
         console.print(f"⚠️  Analysis failed: {e}", style="yellow")
@@ -88,49 +101,51 @@ def callback(
 
 @app.command("system-check")
 def system_check(
-    api_base: Optional[str] = typer.Option(
-        None, "--api-base", help="API base URL to check"
-    ),
+    api_base: Optional[str] = typer.Option(None, "--api-base", help="API base URL to check"),
     provider: Optional[str] = typer.Option(
         None, "--provider", help="Provider to check ('vllm' or 'api-endpoint')"
-    )
+    ),
 ):
     """
     Check if the selected LLM provider's server is running.
     """
     # Check for API_ENDPOINT_KEY directly from environment
     console.print("Environment variable check:", style="bold blue")
-    llama_key = os.environ.get('API_ENDPOINT_KEY')
+    llama_key = os.environ.get("API_ENDPOINT_KEY")
     console.print(f"API_ENDPOINT_KEY: {'Present' if llama_key else 'Not found'}")
     # Debugging sanity test:
     # if llama_key:
-        # console.print(f"  Value starts with: {llama_key[:10]}...")
-    
+    # console.print(f"  Value starts with: {llama_key[:10]}...")
+
     # To check the rename bug:
-    #console.print("Available environment variables:", style="bold blue")
-    #env_vars = [key for key in os.environ.keys() if 'API' in key or 'KEY' in key or 'TOKEN' in key]
-    #for var in env_vars:
+    # console.print("Available environment variables:", style="bold blue")
+    # env_vars = [key for key in os.environ.keys() if 'API' in key or 'KEY' in key or 'TOKEN' in key]
+    # for var in env_vars:
     #    console.print(f"  {var}")
-    #console.print("")
+    # console.print("")
     # Get provider from args or config
     selected_provider = provider or get_llm_provider(ctx.config)
-    
+
     if selected_provider == "api-endpoint":
         # Get API endpoint config
         api_endpoint_config = get_openai_config(ctx.config)
         api_base = api_base or api_endpoint_config.get("api_base")
-        
+
         # Check for environment variables
-        api_endpoint_key = os.environ.get('API_ENDPOINT_KEY')
-        console.print(f"API_ENDPOINT_KEY environment variable: {'Found' if api_endpoint_key else 'Not found'}")
-        
+        api_endpoint_key = os.environ.get("API_ENDPOINT_KEY")
+        console.print(
+            f"API_ENDPOINT_KEY environment variable: {'Found' if api_endpoint_key else 'Not found'}"
+        )
+
         # Set API key with priority: env var > config
         api_key = api_endpoint_key or api_endpoint_config.get("api_key")
         if api_key:
-            console.print(f"API key source: {'Environment variable' if api_endpoint_key else 'Config file'}")
-        
+            console.print(
+                f"API key source: {'Environment variable' if api_endpoint_key else 'Config file'}"
+            )
+
         model = api_endpoint_config.get("model")
-        
+
         # Check API endpoint access
         with console.status(f"Checking API endpoint access..."):
             try:
@@ -141,38 +156,39 @@ def system_check(
                     console.print("L API endpoint package not installed", style="red")
                     console.print("Install with: pip install openai>=1.0.0", style="yellow")
                     return 1
-                
+
                 # Create client
                 client_kwargs = {}
                 if api_key:
-                    client_kwargs['api_key'] = api_key
+                    client_kwargs["api_key"] = api_key
                 if api_base:
-                    client_kwargs['base_url'] = api_base
-                
+                    client_kwargs["base_url"] = api_base
+
                 # Check API access
                 try:
                     client = OpenAI(**client_kwargs)
                     # Try a simple models request to check connectivity
-                    messages = [
-                        {"role": "user", "content": "Hello"}
-                    ]
+                    messages = [{"role": "user", "content": "Hello"}]
                     response = client.chat.completions.create(
-                        model=model,
-                        messages=messages, 
-                        temperature=0.1
+                        model=model, messages=messages, temperature=0.1
                     )
                     console.print(f" API endpoint access confirmed", style="green")
                     if api_base:
                         console.print(f"Using custom API base: {api_base}", style="green")
                     console.print(f"Default model: {model}", style="green")
-                    console.print(f"Response from model: {response.choices[0].message.content}", style="green")
+                    console.print(
+                        f"Response from model: {response.choices[0].message.content}", style="green"
+                    )
                     return 0
                 except Exception as e:
                     console.print(f"L Error connecting to API endpoint: {str(e)}", style="red")
                     if api_base:
                         console.print(f"Using custom API base: {api_base}", style="yellow")
                     if not api_key and not api_base:
-                        console.print("API key is required. Set in config.yaml or as API_ENDPOINT_KEY env var", style="yellow")
+                        console.print(
+                            "API key is required. Set in config.yaml or as API_ENDPOINT_KEY env var",
+                            style="yellow",
+                        )
                     return 1
             except Exception as e:
                 console.print(f"L Error: {str(e)}", style="red")
@@ -184,7 +200,7 @@ def system_check(
         api_base = api_base or vllm_config.get("api_base")
         model = vllm_config.get("model")
         port = vllm_config.get("port", 8000)
-        
+
         with console.status(f"Checking vLLM server at {api_base}..."):
             try:
                 response = requests.get(f"{api_base}/models", timeout=2)
@@ -198,7 +214,7 @@ def system_check(
             except requests.exceptions.RequestException as e:
                 console.print(f"L vLLM server is not available at {api_base}", style="red")
                 console.print(f"Error: {str(e)}")
-                
+
             # Show instruction to start the server
             console.print("\nTo start the server, run:", style="yellow")
             console.print(f"vllm serve {model} --port {port}", style="bold blue")
@@ -211,12 +227,8 @@ def analyze(
     output: Optional[Path] = typer.Option(
         None, "--output", "-o", help="Output path for analysis report (JSON)"
     ),
-    use_llm: bool = typer.Option(
-        False, "--use-llm", help="Use LLM for enhanced summaries/tags"
-    ),
-    no_cache: bool = typer.Option(
-        False, "--no-cache", help="Disable caching"
-    ),
+    use_llm: bool = typer.Option(False, "--use-llm", help="Use LLM for enhanced summaries/tags"),
+    no_cache: bool = typer.Option(False, "--no-cache", help="Disable caching"),
     max_files: Optional[int] = typer.Option(
         None, "--max-files", help="Maximum number of files to analyze"
     ),
@@ -229,9 +241,9 @@ def analyze(
 ):
     """
     Analyze files or directories to extract insights (format, language, keywords, tags, etc.).
-    
+
     Outputs a JSON report with analysis results. Can be used standalone or before other commands.
-    
+
     Examples:
     - synthetic-data-kit analyze document.pdf
     - synthetic-data-kit analyze ./documents/ --output report.json
@@ -240,12 +252,12 @@ def analyze(
     if skip_analysis:
         console.print("Skipping analysis (--skip-analysis flag)", style="yellow")
         return 0
-    
+
     try:
         # Load analysis config
         analysis_config_dict = get_analysis_config(ctx.config)
         analysis_config = AnalysisConfig.from_dict(analysis_config_dict)
-        
+
         # Build options from config and CLI overrides
         options = AnalysisOptions(
             use_llm=use_llm or analysis_config.use_llm,
@@ -257,36 +269,38 @@ def analyze(
             cache_enabled=not no_cache and analysis_config.cache,
             output_path=Path(output) if output else Path(analysis_config.default_output),
             persist_cache=True,
-            max_files=max_files or analysis_config.max_files
+            max_files=max_files or analysis_config.max_files,
         )
-        
+
         # Run analysis
         console.print(f"Analyzing: [bold]{input}[/bold]", style="blue")
         report = analyze_path(Path(input), options, ctx.config)
-        
+
         # Save report
         if options.output_path:
             report.save(options.output_path)
-            console.print(f"✅ Analysis report saved to [bold]{options.output_path}[/bold]", style="green")
+            console.print(
+                f"✅ Analysis report saved to [bold]{options.output_path}[/bold]", style="green"
+            )
         else:
             # Output to stdout
-            console.print("\n" + "="*50, style="bold")
+            console.print("\n" + "=" * 50, style="bold")
             console.print("Analysis Report:", style="bold blue")
             console.print(report.to_json())
-        
+
         # Show summary
-        console.print("\n" + "="*50, style="bold")
+        console.print("\n" + "=" * 50, style="bold")
         console.print(f"Summary:", style="bold blue")
         console.print(f"Files analyzed: {report.stats['num_files_analyzed']}")
         console.print(f"Total time: {report.stats['total_time_ms']:.2f}ms")
         console.print(f"Total chars: {report.stats['total_chars']:,}")
         console.print(f"Total tokens: {report.stats['total_tokens']:,}")
-        if report.aggregate.get('top_keywords'):
+        if report.aggregate.get("top_keywords"):
             console.print(f"Top keywords: {', '.join(report.aggregate['top_keywords'][:10])}")
-        console.print("="*50, style="bold")
-        
+        console.print("=" * 50, style="bold")
+
         return 0
-        
+
     except Exception as e:
         console.print(f"❌ Error: {e}", style="red")
         return 1
@@ -316,7 +330,7 @@ def ingest(
 ):
     """
     Parse documents (PDF, HTML, YouTube, DOCX, PPT, TXT, images) into clean text.
-    
+
     Can process:
     - Single file: synthetic-data-kit ingest document.pdf
     - Directory: synthetic-data-kit ingest ./documents/
@@ -326,55 +340,65 @@ def ingest(
     import os
     from synthetic_data_kit.core.ingest import process_file
     from synthetic_data_kit.utils.directory_processor import is_directory, process_directory_ingest
-    
+
     # Run analysis if enabled
     run_analysis_if_enabled(input, skip_analysis)
-    
+
     # Get output directory from args, then config, then default
     if output_dir is None:
         output_dir = get_path_config(ctx.config, "output", "parsed")
-    
+
     try:
         # Check if input is a directory
         if is_directory(input):
             # Process directory
             if name is not None:
-                console.print("Warning: --name option is ignored when processing directories", style="yellow")
-            
+                console.print(
+                    "Warning: --name option is ignored when processing directories", style="yellow"
+                )
+
             # Preview mode - show files without processing
             if preview:
                 # Skip analysis in preview mode
-                from synthetic_data_kit.utils.directory_processor import get_directory_stats, INGEST_EXTENSIONS
-                
+                from synthetic_data_kit.utils.directory_processor import (
+                    get_directory_stats,
+                    INGEST_EXTENSIONS,
+                )
+
                 console.print(f"Preview: scanning directory [bold]{input}[/bold]", style="blue")
                 stats = get_directory_stats(input, INGEST_EXTENSIONS)
-                
+
                 if "error" in stats:
                     console.print(f"❌ {stats['error']}", style="red")
                     return 1
-                
+
                 console.print(f"\n📁 Directory: {input}")
                 console.print(f"📄 Total files: {stats['total_files']}")
                 console.print(f"✅ Supported files: {stats['supported_files']}")
                 console.print(f"❌ Unsupported files: {stats['unsupported_files']}")
-                
-                if stats['supported_files'] > 0:
+
+                if stats["supported_files"] > 0:
                     console.print(f"\n📋 Files that would be processed:")
-                    for ext, count in stats['by_extension'].items():
+                    for ext, count in stats["by_extension"].items():
                         console.print(f"  {ext}: {count} file(s)")
-                    
+
                     console.print(f"\n📝 File list:")
-                    for filename in stats['file_list']:
+                    for filename in stats["file_list"]:
                         console.print(f"  • {filename}")
-                    
+
                     console.print(f"\n💡 To process these files, run:")
-                    console.print(f"   synthetic-data-kit ingest {input} --output-dir {output_dir}", style="bold blue")
+                    console.print(
+                        f"   synthetic-data-kit ingest {input} --output-dir {output_dir}",
+                        style="bold blue",
+                    )
                 else:
                     console.print(f"\n⚠️  No supported files found.", style="yellow")
-                    console.print(f"   Supported extensions: {', '.join(INGEST_EXTENSIONS)}", style="yellow")
-                
+                    console.print(
+                        f"   Supported extensions: {', '.join(INGEST_EXTENSIONS)}", style="yellow"
+                    )
+
                 return 0
-            
+
             console.print(f"Processing directory: [bold]{input}[/bold]", style="blue")
             results = process_directory_ingest(
                 directory=input,
@@ -383,7 +407,7 @@ def ingest(
                 verbose=verbose,
                 multimodal=multimodal,
             )
-            
+
             # Return appropriate exit code
             if results["failed"] > 0:
                 console.print(f"⚠️  Completed with {results['failed']} errors", style="yellow")
@@ -394,8 +418,11 @@ def ingest(
         else:
             # Process single file (existing logic)
             if preview:
-                console.print("Preview mode is only available for directories. Processing single file...", style="yellow")
-            
+                console.print(
+                    "Preview mode is only available for directories. Processing single file...",
+                    style="yellow",
+                )
+
             with console.status(f"Processing {input}..."):
                 output_path = process_file(
                     input,
@@ -404,9 +431,11 @@ def ingest(
                     config=ctx.config,
                     multimodal=multimodal,
                 )
-            console.print(f"✅ Text successfully extracted to [bold]{output_path}[/bold]", style="green")
+            console.print(
+                f"✅ Text successfully extracted to [bold]{output_path}[/bold]", style="green"
+            )
             return 0
-            
+
     except Exception as e:
         console.print(f"❌ Error: {e}", style="red")
         return 1
@@ -415,12 +444,16 @@ def ingest(
 @app.command("plan")
 def plan_cmd(
     analysis: Path = typer.Option(..., "--analysis", "-a", help="Path to analysis.json report"),
-    output: Path = typer.Option("data/analysis/plan.json", "--output", "-o", help="Output path for plan.json"),
-    config: Optional[Path] = typer.Option(None, "--config", "-c", help="Path to planning config (uses main config if not specified)")
+    output: Path = typer.Option(
+        "data/analysis/plan.json", "--output", "-o", help="Output path for plan.json"
+    ),
+    config: Optional[Path] = typer.Option(
+        None, "--config", "-c", help="Path to planning config (uses main config if not specified)"
+    ),
 ):
     """
     Build a generation plan from analysis results and planning configuration.
-    
+
     Examples:
     - synthetic-data-kit plan --analysis report.json -o plan.json
     - synthetic-data-kit plan -a analysis.json -c planning.yaml -o plan.json
@@ -441,29 +474,27 @@ def plan_cmd(
 def create(
     input: str = typer.Argument(..., help="File or directory to process"),
     content_type: str = typer.Option(
-        "qa", "--type", help="Type of content to generate [qa|summary|cot|cot-enhance|multimodal-qa]"
+        "qa",
+        "--type",
+        help="Type of content to generate [qa|summary|cot|cot-enhance|multimodal-qa]",
     ),
     output_dir: Optional[Path] = typer.Option(
         None, "--output-dir", "-o", help="Where to save the output"
     ),
-    api_base: Optional[str] = typer.Option(
-        None, "--api-base", help="VLLM API base URL"
-    ),
-    model: Optional[str] = typer.Option(
-        None, "--model", "-m", help="Model to use"
-    ),
+    api_base: Optional[str] = typer.Option(None, "--api-base", help="VLLM API base URL"),
+    model: Optional[str] = typer.Option(None, "--model", "-m", help="Model to use"),
     num_pairs: Optional[int] = typer.Option(
         None, "--num-pairs", "-n", help="Target number of QA pairs or CoT examples to generate"
     ),
     chunk_size: Optional[int] = typer.Option(
-        None, "--chunk-size", help="Size of text chunks for processing large documents (default: 4000)"
+        None,
+        "--chunk-size",
+        help="Size of text chunks for processing large documents (default: 4000)",
     ),
     chunk_overlap: Optional[int] = typer.Option(
         None, "--chunk-overlap", help="Overlap between chunks in characters (default: 200)"
     ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Show detailed output"
-    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
     preview: bool = typer.Option(
         False, "--preview", help="Preview files to be processed without actually processing them"
     ),
@@ -479,12 +510,12 @@ def create(
 ):
     """
     Generate content from text using local LLM inference.
-    
+
     Can process:
     - Single file: synthetic-data-kit create document.txt --type qa
     - Directory: synthetic-data-kit create ./processed-text/ --type qa
     - With plan: synthetic-data-kit create ./input/ --plan plan.json
-    
+
     Content types:
     - qa: Generate question-answer pairs from .txt files (use --num-pairs to specify how many)
     - summary: Generate summaries from .txt files
@@ -496,14 +527,19 @@ def create(
        - A single conversation in 'conversations' field
        - An array of conversation objects, each with a 'conversations' field
        - A direct array of conversation messages)
-    
+
     When --plan is provided, generation follows the plan.json specifications for quotas, prompts, and gates.
     Use --dry-run to preview what would be generated without actually generating.
     """
     import os
     from synthetic_data_kit.core.create import process_file
-    from synthetic_data_kit.utils.directory_processor import is_directory, process_directory_create, get_directory_stats, CREATE_EXTENSIONS
-    
+    from synthetic_data_kit.utils.directory_processor import (
+        is_directory,
+        process_directory_create,
+        get_directory_stats,
+        CREATE_EXTENSIONS,
+    )
+
     # Handle plan-driven generation
     plan_spec = None
     if plan:
@@ -515,15 +551,15 @@ def create(
         except Exception as e:
             console.print(f"❌ Error loading plan: {e}", style="red")
             return 1
-    
+
     # Run analysis if enabled (skip in preview mode or dry run)
     if not preview and not dry_run:
         run_analysis_if_enabled(input, skip_analysis)
-    
+
     # Check the LLM provider from config
     provider = get_llm_provider(ctx.config)
     console.print(f"🔗 Using {provider} provider", style="green")
-    
+
     if provider == "api-endpoint":
         # Use API endpoint config
         api_endpoint_config = get_openai_config(ctx.config)
@@ -535,7 +571,7 @@ def create(
         vllm_config = get_vllm_config(ctx.config)
         api_base = api_base or vllm_config.get("api_base")
         model = model or vllm_config.get("model")
-        
+
         # Check vLLM server availability
         try:
             response = requests.get(f"{api_base}/models", timeout=2)
@@ -549,52 +585,63 @@ def create(
             console.print("Please start the VLLM server with:", style="yellow")
             console.print(f"vllm serve {model}", style="bold blue")
             return 1
-    
+
     # Get output directory from args, then config, then default
     if output_dir is None:
         output_dir = get_path_config(ctx.config, "output", "generated")
-    
+
     try:
         # Check if input is a directory
         if is_directory(input) and not input.endswith(".lance"):
             # Preview mode - show files without processing
             if preview:
                 # For cot-enhance, look for .json files, otherwise .txt files
-                extensions = ['.json'] if content_type == "cot-enhance" else CREATE_EXTENSIONS
-                
-                console.print(f"Preview: scanning directory [bold]{input}[/bold] for {content_type} processing", style="blue")
+                extensions = [".json"] if content_type == "cot-enhance" else CREATE_EXTENSIONS
+
+                console.print(
+                    f"Preview: scanning directory [bold]{input}[/bold] for {content_type} processing",
+                    style="blue",
+                )
                 stats = get_directory_stats(input, extensions)
-                
+
                 if "error" in stats:
                     console.print(f"❌ {stats['error']}", style="red")
                     return 1
-                
+
                 console.print(f"\n📁 Directory: {input}")
                 console.print(f"📄 Total files: {stats['total_files']}")
                 console.print(f"✅ Supported files: {stats['supported_files']}")
                 console.print(f"❌ Unsupported files: {stats['unsupported_files']}")
-                
-                if stats['supported_files'] > 0:
+
+                if stats["supported_files"] > 0:
                     console.print(f"\n📋 Files that would be processed for {content_type}:")
-                    for ext, count in stats['by_extension'].items():
+                    for ext, count in stats["by_extension"].items():
                         console.print(f"  {ext}: {count} file(s)")
-                    
+
                     console.print(f"\n📝 File list:")
-                    for filename in stats['file_list']:
+                    for filename in stats["file_list"]:
                         console.print(f"  • {filename}")
-                    
+
                     console.print(f"\n💡 To process these files, run:")
-                    console.print(f"   synthetic-data-kit create {input} --type {content_type} --output-dir {output_dir}", style="bold blue")
+                    console.print(
+                        f"   synthetic-data-kit create {input} --type {content_type} --output-dir {output_dir}",
+                        style="bold blue",
+                    )
                 else:
-                    console.print(f"\n⚠️  No supported files found for {content_type}.", style="yellow")
+                    console.print(
+                        f"\n⚠️  No supported files found for {content_type}.", style="yellow"
+                    )
                     if content_type == "cot-enhance":
                         console.print(f"   Looking for: .json files", style="yellow")
                     else:
                         console.print(f"   Looking for: .txt files", style="yellow")
-                
+
                 return 0
-            
-            console.print(f"Processing directory: [bold]{input}[/bold] for {content_type} generation", style="blue")
+
+            console.print(
+                f"Processing directory: [bold]{input}[/bold] for {content_type} generation",
+                style="blue",
+            )
             results = process_directory_create(
                 directory=input,
                 output_dir=output_dir,
@@ -610,7 +657,7 @@ def create(
                 plan=plan_spec,
                 dry_run=dry_run,
             )
-            
+
             # Return appropriate exit code
             if results["failed"] > 0:
                 console.print(f"⚠️  Completed with {results['failed']} errors", style="yellow")
@@ -621,8 +668,11 @@ def create(
         else:
             # Process single file (existing logic)
             if preview:
-                console.print("Preview mode is only available for directories. Processing single file...", style="yellow")
-            
+                console.print(
+                    "Preview mode is only available for directories. Processing single file...",
+                    style="yellow",
+                )
+
             # Find matching file plan if using plan
             file_plan = None
             if plan_spec:
@@ -631,7 +681,7 @@ def create(
                     if str(Path(fp.file_path).resolve()) == input_path_str:
                         file_plan = fp
                         break
-            
+
             with console.status(f"Generating {content_type} content from {input}..."):
                 output_path = process_file(
                     input,
@@ -647,14 +697,14 @@ def create(
                     chunk_overlap=chunk_overlap,
                     plan=plan_spec,
                     file_plan=file_plan,
-                    dry_run=dry_run
+                    dry_run=dry_run,
                 )
             if output_path:
                 console.print(f"✅ Content saved to [bold]{output_path}[/bold]", style="green")
             elif dry_run:
                 console.print("✅ Dry run complete", style="green")
             return 0
-            
+
     except Exception as e:
         console.print(f"❌ Error: {e}", style="red")
         return 1
@@ -670,15 +720,13 @@ def generate(
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show what would be generated without actually generating"
     ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Show detailed output"
-    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
 ):
     """
     Generate content using a plan (alias for create --plan).
-    
+
     This is a convenience command that calls create with --plan.
-    
+
     Examples:
     - synthetic-data-kit generate ./input/ --plan plan.json
     - synthetic-data-kit generate ./input/ --plan plan.json --dry-run
@@ -690,7 +738,7 @@ def generate(
         output_dir=output_dir,
         dry_run=dry_run,
         verbose=verbose,
-        skip_analysis=True  # Skip analysis since plan was already built from analysis
+        skip_analysis=True,  # Skip analysis since plan was already built from analysis
     )
 
 
@@ -698,20 +746,17 @@ def generate(
 def curate(
     input: str = typer.Argument(..., help="Input file or directory to clean"),
     output: Optional[Path] = typer.Option(
-        None, "--output", "-o", help="Output file path (for single files) or directory (for directories)"
+        None,
+        "--output",
+        "-o",
+        help="Output file path (for single files) or directory (for directories)",
     ),
     threshold: Optional[float] = typer.Option(
         None, "--threshold", "-t", help="Quality threshold (1-10)"
     ),
-    api_base: Optional[str] = typer.Option(
-        None, "--api-base", help="VLLM API base URL"
-    ),
-    model: Optional[str] = typer.Option(
-        None, "--model", "-m", help="Model to use"
-    ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Show detailed output"
-    ),
+    api_base: Optional[str] = typer.Option(None, "--api-base", help="VLLM API base URL"),
+    model: Optional[str] = typer.Option(None, "--model", "-m", help="Model to use"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
     preview: bool = typer.Option(
         False, "--preview", help="Preview files to be processed without actually processing them"
     ),
@@ -721,26 +766,31 @@ def curate(
 ):
     """
     Clean and filter content based on quality.
-    
+
     Can process:
     - Single file: synthetic-data-kit curate qa_pairs.json --threshold 8.0
     - Directory: synthetic-data-kit curate ./generated/ --threshold 8.0
-    
+
     Processes .json files containing QA pairs and filters them based on quality ratings.
     """
     import os
     from synthetic_data_kit.core.curate import curate_qa_pairs
-    from synthetic_data_kit.utils.directory_processor import is_directory, process_directory_curate, get_directory_stats, CURATE_EXTENSIONS
-    
+    from synthetic_data_kit.utils.directory_processor import (
+        is_directory,
+        process_directory_curate,
+        get_directory_stats,
+        CURATE_EXTENSIONS,
+    )
+
     # Run analysis if enabled (skip in preview mode)
     if not preview:
         run_analysis_if_enabled(input, skip_analysis)
-    
+
     # Check the LLM provider from config
     provider = get_llm_provider(ctx.config)
-    
+
     console.print(f"🔗 Using {provider} provider", style="green")
-    
+
     if provider == "api-endpoint":
         # Use API endpoint config
         api_endpoint_config = get_openai_config(ctx.config)
@@ -752,7 +802,7 @@ def curate(
         vllm_config = get_vllm_config(ctx.config)
         api_base = api_base or vllm_config.get("api_base")
         model = model or vllm_config.get("model")
-        
+
         # Check vLLM server availability
         try:
             response = requests.get(f"{api_base}/models", timeout=2)
@@ -766,46 +816,51 @@ def curate(
             console.print("Please start the VLLM server with:", style="yellow")
             console.print(f"vllm serve {model}", style="bold blue")
             return 1
-    
+
     try:
         # Check if input is a directory
         if is_directory(input):
             # Preview mode - show files without processing
             if preview:
-                console.print(f"Preview: scanning directory [bold]{input}[/bold] for curation", style="blue")
+                console.print(
+                    f"Preview: scanning directory [bold]{input}[/bold] for curation", style="blue"
+                )
                 stats = get_directory_stats(input, CURATE_EXTENSIONS)
-                
+
                 if "error" in stats:
                     console.print(f"❌ {stats['error']}", style="red")
                     return 1
-                
+
                 console.print(f"\n📁 Directory: {input}")
                 console.print(f"📄 Total files: {stats['total_files']}")
                 console.print(f"✅ Supported files: {stats['supported_files']}")
                 console.print(f"❌ Unsupported files: {stats['unsupported_files']}")
-                
-                if stats['supported_files'] > 0:
+
+                if stats["supported_files"] > 0:
                     console.print(f"\n📋 Files that would be curated:")
-                    for ext, count in stats['by_extension'].items():
+                    for ext, count in stats["by_extension"].items():
                         console.print(f"  {ext}: {count} file(s)")
-                    
+
                     console.print(f"\n📝 File list:")
-                    for filename in stats['file_list']:
+                    for filename in stats["file_list"]:
                         console.print(f"  • {filename}")
-                    
+
                     default_output = get_path_config(ctx.config, "output", "curated")
                     console.print(f"\n💡 To process these files, run:")
-                    console.print(f"   synthetic-data-kit curate {input} --threshold {threshold or 7.0} --output {output or default_output}", style="bold blue")
+                    console.print(
+                        f"   synthetic-data-kit curate {input} --threshold {threshold or 7.0} --output {output or default_output}",
+                        style="bold blue",
+                    )
                 else:
                     console.print(f"\n⚠️  No supported files found for curation.", style="yellow")
                     console.print(f"   Looking for: .json files with QA pairs", style="yellow")
-                
+
                 return 0
-            
+
             # Get default output directory if not provided
             if not output:
                 output = get_path_config(ctx.config, "output", "curated")
-            
+
             console.print(f"Processing directory: [bold]{input}[/bold] for curation", style="blue")
             results = process_directory_curate(
                 directory=input,
@@ -815,9 +870,9 @@ def curate(
                 model=model,
                 config_path=ctx.config_path,
                 verbose=verbose,
-                provider=provider
+                provider=provider,
             )
-            
+
             # Return appropriate exit code
             if results["failed"] > 0:
                 console.print(f"⚠️  Completed with {results['failed']} errors", style="yellow")
@@ -828,15 +883,18 @@ def curate(
         else:
             # Process single file (existing logic)
             if preview:
-                console.print("Preview mode is only available for directories. Processing single file...", style="yellow")
-            
+                console.print(
+                    "Preview mode is only available for directories. Processing single file...",
+                    style="yellow",
+                )
+
             # Get default output path from config if not provided
             if not output:
                 curated_dir = get_path_config(ctx.config, "output", "curated")
                 os.makedirs(curated_dir, exist_ok=True)
                 base_name = os.path.splitext(os.path.basename(input))[0]
                 output = os.path.join(curated_dir, f"{base_name}_cleaned.json")
-            
+
             with console.status(f"Cleaning content from {input}..."):
                 result_path = curate_qa_pairs(
                     input,
@@ -846,11 +904,11 @@ def curate(
                     model,
                     ctx.config_path,
                     verbose,
-                    provider=provider
+                    provider=provider,
                 )
             console.print(f"✅ Cleaned content saved to [bold]{result_path}[/bold]", style="green")
             return 0
-            
+
     except Exception as e:
         console.print(f"❌ Error: {e}", style="red")
         return 1
@@ -863,92 +921,110 @@ def save_as(
         None, "--format", "-f", help="Output format [jsonl|alpaca|ft|chatml]"
     ),
     storage: str = typer.Option(
-        "json", "--storage", help="Storage format [json|hf]",
-        show_default=True
+        "json", "--storage", help="Storage format [json|hf]", show_default=True
     ),
     output: Optional[Path] = typer.Option(
-        None, "--output", "-o", help="Output file path (for single files) or directory (for directories)"
+        None,
+        "--output",
+        "-o",
+        help="Output file path (for single files) or directory (for directories)",
     ),
-    verbose: bool = typer.Option(
-        False, "--verbose", "-v", help="Show detailed output"
-    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
     preview: bool = typer.Option(
         False, "--preview", help="Preview files to be processed without actually processing them"
     ),
 ):
     """
     Convert to different formats for fine-tuning.
-    
+
     Can process:
     - Single file: synthetic-data-kit save-as curated_file.json --format alpaca
     - Directory: synthetic-data-kit save-as ./curated/ --format alpaca
-    
+
     The --format option controls the content format (how the data is structured).
     The --storage option controls how the data is stored (JSON file or HF dataset).
-    
-    When using --storage hf, the output will be a directory containing a Hugging Face 
+
+    When using --storage hf, the output will be a directory containing a Hugging Face
     dataset in Arrow format, which is optimized for machine learning workflows.
-    
+
     Processes .json files containing curated QA pairs and converts them to training formats.
     """
     import os
     from synthetic_data_kit.core.save_as import convert_format
-    from synthetic_data_kit.utils.directory_processor import is_directory, process_directory_save_as, get_directory_stats, SAVE_AS_EXTENSIONS
-    
+    from synthetic_data_kit.utils.directory_processor import (
+        is_directory,
+        process_directory_save_as,
+        get_directory_stats,
+        SAVE_AS_EXTENSIONS,
+    )
+
     # Get format from args or config
     if not format:
         format_config = ctx.config.get("format", {})
         format = format_config.get("default", "jsonl")
-    
+
     try:
         # Check if input is a directory
         if is_directory(input):
             # Preview mode - show files without processing
             if preview:
-                console.print(f"Preview: scanning directory [bold]{input}[/bold] for format conversion", style="blue")
+                console.print(
+                    f"Preview: scanning directory [bold]{input}[/bold] for format conversion",
+                    style="blue",
+                )
                 stats = get_directory_stats(input, SAVE_AS_EXTENSIONS)
-                
+
                 if "error" in stats:
                     console.print(f"❌ {stats['error']}", style="red")
                     return 1
-                
+
                 console.print(f"\n📁 Directory: {input}")
                 console.print(f"📄 Total files: {stats['total_files']}")
                 console.print(f"✅ Supported files: {stats['supported_files']}")
                 console.print(f"❌ Unsupported files: {stats['unsupported_files']}")
-                
-                if stats['supported_files'] > 0:
+
+                if stats["supported_files"] > 0:
                     console.print(f"\n📋 Files that would be converted to {format} format:")
-                    for ext, count in stats['by_extension'].items():
+                    for ext, count in stats["by_extension"].items():
                         console.print(f"  {ext}: {count} file(s)")
-                    
+
                     console.print(f"\n📝 File list:")
-                    for filename in stats['file_list']:
+                    for filename in stats["file_list"]:
                         console.print(f"  • {filename}")
-                    
+
                     default_output = get_path_config(ctx.config, "output", "final")
                     console.print(f"\n💡 To process these files, run:")
-                    console.print(f"   synthetic-data-kit save-as {input} --format {format} --storage {storage} --output {output or default_output}", style="bold blue")
+                    console.print(
+                        f"   synthetic-data-kit save-as {input} --format {format} --storage {storage} --output {output or default_output}",
+                        style="bold blue",
+                    )
                 else:
-                    console.print(f"\n⚠️  No supported files found for format conversion.", style="yellow")
-                    console.print(f"   Looking for: .json files with curated QA pairs", style="yellow")
-                
+                    console.print(
+                        f"\n⚠️  No supported files found for format conversion.", style="yellow"
+                    )
+                    console.print(
+                        f"   Looking for: .json files with curated QA pairs", style="yellow"
+                    )
+
                 return 0
-            
+
             # Get default output directory if not provided
             if not output:
                 output = get_path_config(ctx.config, "output", "final")
-            
-            console.print(f"Processing directory: [bold]{input}[/bold] for format conversion to {format}", style="blue")
+
+            console.print(
+                f"Processing directory: [bold]{input}[/bold] for format conversion to {format}",
+                style="blue",
+            )
             results = process_directory_save_as(
                 directory=input,
                 output_dir=output,
                 format=format,
                 storage_format=storage,
                 config=ctx.config,
-                verbose=verbose
+                verbose=verbose,
             )
-            
+
             # Return appropriate exit code
             if results["failed"] > 0:
                 console.print(f"⚠️  Completed with {results['failed']} errors", style="yellow")
@@ -959,14 +1035,17 @@ def save_as(
         else:
             # Process single file (existing logic)
             if preview:
-                console.print("Preview mode is only available for directories. Processing single file...", style="yellow")
-            
+                console.print(
+                    "Preview mode is only available for directories. Processing single file...",
+                    style="yellow",
+                )
+
             # Set default output path if not provided
             if not output:
                 final_dir = get_path_config(ctx.config, "output", "final")
                 os.makedirs(final_dir, exist_ok=True)
                 base_name = os.path.splitext(os.path.basename(input))[0]
-                
+
                 if storage == "hf":
                     # For HF datasets, use a directory name
                     output = os.path.join(final_dir, f"{base_name}_{format}_hf")
@@ -976,22 +1055,24 @@ def save_as(
                         output = os.path.join(final_dir, f"{base_name}.jsonl")
                     else:
                         output = os.path.join(final_dir, f"{base_name}_{format}.json")
-            
+
             with console.status(f"Converting {input} to {format} format with {storage} storage..."):
                 output_path = convert_format(
-                    input,
-                    output,
-                    format,
-                    ctx.config,
-                    storage_format=storage
+                    input, output, format, ctx.config, storage_format=storage
                 )
-            
+
             if storage == "hf":
-                console.print(f"✅ Converted to {format} format and saved as HF dataset to [bold]{output_path}[/bold]", style="green")
+                console.print(
+                    f"✅ Converted to {format} format and saved as HF dataset to [bold]{output_path}[/bold]",
+                    style="green",
+                )
             else:
-                console.print(f"✅ Converted to {format} format and saved to [bold]{output_path}[/bold]", style="green")
+                console.print(
+                    f"✅ Converted to {format} format and saved to [bold]{output_path}[/bold]",
+                    style="green",
+                )
             return 0
-            
+
     except Exception as e:
         console.print(f"❌ Error: {e}", style="red")
         return 1
@@ -999,19 +1080,13 @@ def save_as(
 
 @app.command("server")
 def server(
-    host: str = typer.Option(
-        "127.0.0.1", "--host", help="Host address to bind the server to"
-    ),
-    port: int = typer.Option(
-        5000, "--port", "-p", help="Port to run the server on"
-    ),
-    debug: bool = typer.Option(
-        False, "--debug", "-d", help="Run the server in debug mode"
-    ),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host address to bind the server to"),
+    port: int = typer.Option(5000, "--port", "-p", help="Port to run the server on"),
+    debug: bool = typer.Option(False, "--debug", "-d", help="Run the server in debug mode"),
 ):
     """
     Start a web interface for the Synthetic Data Kit.
-    
+
     This launches a web server that provides a UI for all SDK functionality,
     including generating and curating QA pairs, as well as viewing
     and managing generated files.
@@ -1020,7 +1095,7 @@ def server(
     console.print(f"Starting web server with {provider} provider...", style="green")
     console.print(f"Web interface available at: http://{host}:{port}", style="bold green")
     console.print("Press CTRL+C to stop the server.", style="italic")
-    
+
     # Run the Flask server
     run_server(host=host, port=port, debug=debug)
 

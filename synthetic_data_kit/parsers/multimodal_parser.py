@@ -15,6 +15,7 @@ import os
 import docx
 from pptx import Presentation
 
+
 class MultimodalParser:
     def parse(self, file_path: str) -> List[Dict[str, Any]]:
         """

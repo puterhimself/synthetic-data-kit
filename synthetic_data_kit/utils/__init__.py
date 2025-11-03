@@ -5,9 +5,9 @@
 # the root directory of this source tree.
 # Utility files for all classes
 from synthetic_data_kit.utils.config import (
-    load_config, 
-    get_path_config, 
-    get_vllm_config, 
+    load_config,
+    get_path_config,
+    get_vllm_config,
     get_generation_config,
     get_curate_config,
     get_format_config,

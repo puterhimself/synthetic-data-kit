@@ -9,10 +9,9 @@ import pyarrow as pa
 from typing import List, Dict, Any, Optional
 import os
 
+
 def create_lance_dataset(
-    data: List[Dict[str, Any]],
-    output_path: str,
-    schema: Optional[pa.Schema] = None
+    data: List[Dict[str, Any]], output_path: str, schema: Optional[pa.Schema] = None
 ) -> None:
     """Create a Lance dataset from a list of dictionaries.
 
@@ -32,9 +31,8 @@ def create_lance_dataset(
     table = pa.Table.from_pylist(data, schema=schema)
     lance.write_dataset(table, output_path, mode="overwrite")
 
-def load_lance_dataset(
-    dataset_path: str
-):
+
+def load_lance_dataset(dataset_path: str):
     """Load a Lance dataset.
 
     Args:
