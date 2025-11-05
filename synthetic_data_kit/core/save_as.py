@@ -16,6 +16,7 @@ from synthetic_data_kit.utils.format_converter import (
     to_fine_tuning,
     to_chatml,
     to_hf_dataset,
+    to_conversations_jsonl,
 )
 from synthetic_data_kit.utils.llm_processing import convert_to_conversation_format
 
@@ -107,6 +108,11 @@ def convert_format(
                         ]
                     }
                 )
+        elif format_type == "conversation":
+            conversations = convert_to_conversation_format(qa_pairs)
+            formatted_pairs = [
+                {"conversations": conversation} for conversation in conversations
+            ]
         else:
             raise ValueError(f"Unknown format type: {format_type}")
 
@@ -124,6 +130,9 @@ def convert_format(
             return to_fine_tuning(qa_pairs, output_path)
         elif format_type == "chatml":
             return to_chatml(qa_pairs, output_path)
+        elif format_type == "conversation":
+            conversations = convert_to_conversation_format(qa_pairs)
+            return to_conversations_jsonl(conversations, output_path)
         else:
             raise ValueError(f"Unknown format type: {format_type}")
 

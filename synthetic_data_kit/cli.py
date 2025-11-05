@@ -919,7 +919,7 @@ def curate(
 def save_as(
     input: str = typer.Argument(..., help="Input file or directory to convert"),
     format: Optional[str] = typer.Option(
-        None, "--format", "-f", help="Output format [jsonl|alpaca|ft|chatml]"
+        None, "--format", "-f", help="Output format [jsonl|alpaca|ft|chatml|conversation]"
     ),
     storage: str = typer.Option(
         "json", "--storage", help="Storage format [json|hf]", show_default=True
@@ -960,6 +960,12 @@ def save_as(
         "--hub-commit-message",
         help="Custom commit message when pushing to Hugging Face",
     ),
+    hub_upload_folder: bool = typer.Option(
+        False,
+        "--hub-upload-folder",
+        help="Upload the entire output directory when pushing to Hugging Face (default uploads individual files)",
+        is_flag=True,
+    ),
 ):
     """
     Convert to different formats for fine-tuning.
@@ -973,6 +979,9 @@ def save_as(
 
     When using --storage hf, the output will be a directory containing a Hugging Face
     dataset in Arrow format, which is optimized for machine learning workflows.
+
+    By default, --push-to-hub uploads individual converted files. Use --hub-upload-folder
+    to upload the entire output directory instead.
 
     Processes .json files containing curated QA pairs and converts them to training formats.
     """
@@ -1094,19 +1103,64 @@ def save_as(
                     token, repo_id_value, private_flag, commit_message_value, path_in_repo_value = (
                         resolve_hf_params()
                     )
-                    output_dir_path = str(output)
-                    hub_url = push_to_huggingface_hub(
-                        output_dir_path,
-                        repo_id_value,
-                        token,
-                        private=private_flag,
-                        path_in_repo=path_in_repo_value,
-                        commit_message=commit_message_value,
-                    )
-                    console.print(
-                        f"☁️  Uploaded converted artifacts to [bold]{hub_url}[/bold]",
-                        style="green",
-                    )
+                    successful_results = [
+                        item for item in results["results"] if item.get("status") == "success"
+                    ]
+                    multiple_outputs = len(successful_results) > 1
+
+                    if not successful_results:
+                        console.print(
+                            "⚠️  No converted files found to upload.",
+                            style="yellow",
+                        )
+                    elif hub_upload_folder:
+                        output_dir_path = str(output)
+                        hub_url = push_to_huggingface_hub(
+                            output_dir_path,
+                            repo_id_value,
+                            token,
+                            private=private_flag,
+                            path_in_repo=path_in_repo_value,
+                            commit_message=commit_message_value,
+                        )
+                        console.print(
+                            f"☁️  Uploaded output directory to [bold]{hub_url}[/bold]",
+                            style="green",
+                        )
+                    else:
+                        if len(successful_results) > 1:
+                            console.print(
+                                "ℹ️  Uploading only individual converted files. Use --hub-upload-folder to push the entire directory.",
+                                style="cyan",
+                            )
+
+                        last_hub_url = None
+                        for item in successful_results:
+                            output_file_path = item["output_file"]
+
+                            repo_path = path_in_repo_value
+                            if repo_path and repo_path.endswith("/"):
+                                repo_path = os.path.join(repo_path, os.path.basename(output_file_path))
+                            elif repo_path:
+                                # Treat non-suffixed repo paths as directory prefixes when handling multiple files
+                                # or when the provided path doesn't look like a filename.
+                                looks_like_file = bool(os.path.splitext(repo_path)[1])
+                                if multiple_outputs or not looks_like_file:
+                                    repo_path = os.path.join(repo_path, os.path.basename(output_file_path))
+
+                            last_hub_url = push_to_huggingface_hub(
+                                str(output_file_path),
+                                repo_id_value,
+                                token,
+                                private=private_flag,
+                                path_in_repo=repo_path,
+                                commit_message=commit_message_value,
+                            )
+
+                            console.print(
+                                f"☁️  Uploaded [bold]{os.path.basename(output_file_path)}[/bold] to [bold]{last_hub_url}[/bold]",
+                                style="green",
+                            )
 
                 return 0
         else:

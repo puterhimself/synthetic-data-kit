@@ -66,17 +66,8 @@ def to_chatml(qa_pairs: List[Dict[str, str]], output_path: str) -> str:
     return output_path
 
 
-def to_hf_dataset(qa_pairs: List[Dict[str, str]], output_path: str) -> str:
-    """
-    Convert QA pairs to a Hugging Face dataset and save in Arrow format.
-
-    Args:
-        qa_pairs: List of question-answer dictionaries
-        output_path: Directory path to save the dataset
-
-    Returns:
-        Path to the saved dataset directory
-    """
+def to_hf_dataset(records: List[Dict[str, Any]], output_path: str) -> str:
+    """Save a list of records as a Hugging Face dataset in Arrow format."""
     try:
         from datasets import Dataset
     except ImportError:
@@ -94,8 +85,8 @@ def to_hf_dataset(qa_pairs: List[Dict[str, str]], output_path: str) -> str:
 
     # Convert list of dicts to dict of lists for Dataset.from_dict()
     dict_of_lists = {}
-    for key in qa_pairs[0].keys():
-        dict_of_lists[key] = [item.get(key, "") for item in qa_pairs]
+    for key in records[0].keys():
+        dict_of_lists[key] = [item.get(key, "") for item in records]
 
     # Create dataset
     dataset = Dataset.from_dict(dict_of_lists)
@@ -103,4 +94,12 @@ def to_hf_dataset(qa_pairs: List[Dict[str, str]], output_path: str) -> str:
     # Save dataset in Arrow format
     dataset.save_to_disk(output_path)
 
+    return output_path
+
+
+def to_conversations_jsonl(conversations: List[List[Dict[str, Any]]], output_path: str) -> str:
+    """Write one conversation (list of messages) per JSONL row"""
+    with open(output_path, "w", encoding="utf-8") as f:
+        for conversation in conversations:
+            f.write(json.dumps(conversation) + "\n")
     return output_path
