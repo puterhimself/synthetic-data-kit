@@ -191,3 +191,16 @@ def merge_configs(base_config: Dict[str, Any], override_config: Dict[str, Any]) 
         else:
             result[key] = value
     return result
+
+
+def get_huggingface_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Get Hugging Face Hub configuration settings"""
+    hf_config = config.get("huggingface", {}) or {}
+
+    return {
+        "token": hf_config.get("token"),
+        "repo_id": hf_config.get("repo_id"),
+        "private": hf_config.get("private", False),
+        "path_in_repo": hf_config.get("path_in_repo"),
+        "commit_message": hf_config.get("commit_message"),
+    }

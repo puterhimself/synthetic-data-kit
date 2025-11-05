@@ -21,6 +21,7 @@ from synthetic_data_kit.utils.config import (
     get_path_config,
     get_analysis_config,
     get_plan_config,
+    get_huggingface_config,
 )
 from synthetic_data_kit.core.context import AppContext
 from synthetic_data_kit.server.app import run_server
@@ -933,6 +934,32 @@ def save_as(
     preview: bool = typer.Option(
         False, "--preview", help="Preview files to be processed without actually processing them"
     ),
+    push_to_hub: bool = typer.Option(
+        False,
+        "--push-to-hub",
+        help="Push converted output to Hugging Face Hub when finished",
+        is_flag=True,
+    ),
+    hub_repo: Optional[str] = typer.Option(
+        None,
+        "--hub-repo",
+        help="Target Hugging Face dataset repo_id (e.g., user/dataset)",
+    ),
+    hub_path: Optional[str] = typer.Option(
+        None,
+        "--hub-path",
+        help="Optional path inside the Hugging Face repo for the uploaded artifact",
+    ),
+    hub_private: Optional[bool] = typer.Option(
+        None,
+        "--hub-private/--hub-public",
+        help="Override repo privacy when pushing to Hugging Face",
+    ),
+    hub_commit_message: Optional[str] = typer.Option(
+        None,
+        "--hub-commit-message",
+        help="Custom commit message when pushing to Hugging Face",
+    ),
 ):
     """
     Convert to different formats for fine-tuning.
@@ -950,7 +977,7 @@ def save_as(
     Processes .json files containing curated QA pairs and converts them to training formats.
     """
     import os
-    from synthetic_data_kit.core.save_as import convert_format
+    from synthetic_data_kit.core.save_as import convert_format, push_to_huggingface_hub
     from synthetic_data_kit.utils.directory_processor import (
         is_directory,
         process_directory_save_as,
@@ -964,6 +991,32 @@ def save_as(
         format = format_config.get("default", "jsonl")
 
     try:
+        if preview and push_to_hub:
+            console.print("⚠️  --push-to-hub is ignored in preview mode", style="yellow")
+
+        def resolve_hf_params():
+            hf_config = get_huggingface_config(ctx.config)
+            token = os.environ.get("HUGGINGFACE_TOKEN") or hf_config.get("token")
+            if not token:
+                raise ValueError(
+                    "Hugging Face token not found. Set HUGGINGFACE_TOKEN env var or 'huggingface.token' in config"
+                )
+
+            repo_id_value = hub_repo or hf_config.get("repo_id")
+            if not repo_id_value:
+                raise ValueError(
+                    "Hugging Face repo_id not provided. Use --hub-repo or set 'huggingface.repo_id' in config"
+                )
+
+            private_flag = hf_config.get("private", False)
+            if hub_private is not None:
+                private_flag = hub_private
+
+            commit_message_value = hub_commit_message or hf_config.get("commit_message")
+            path_in_repo_value = hub_path or hf_config.get("path_in_repo")
+
+            return token, repo_id_value, private_flag, commit_message_value, path_in_repo_value
+
         # Check if input is a directory
         if is_directory(input):
             # Preview mode - show files without processing
@@ -1028,9 +1081,33 @@ def save_as(
             # Return appropriate exit code
             if results["failed"] > 0:
                 console.print(f"⚠️  Completed with {results['failed']} errors", style="yellow")
+                if push_to_hub:
+                    console.print(
+                        "⚠️  Skipping Hugging Face upload because some files failed to convert",
+                        style="yellow",
+                    )
                 return 1
             else:
                 console.print("✅ All files converted successfully!", style="green")
+
+                if push_to_hub:
+                    token, repo_id_value, private_flag, commit_message_value, path_in_repo_value = (
+                        resolve_hf_params()
+                    )
+                    output_dir_path = str(output)
+                    hub_url = push_to_huggingface_hub(
+                        output_dir_path,
+                        repo_id_value,
+                        token,
+                        private=private_flag,
+                        path_in_repo=path_in_repo_value,
+                        commit_message=commit_message_value,
+                    )
+                    console.print(
+                        f"☁️  Uploaded converted artifacts to [bold]{hub_url}[/bold]",
+                        style="green",
+                    )
+
                 return 0
         else:
             # Process single file (existing logic)
@@ -1069,6 +1146,23 @@ def save_as(
             else:
                 console.print(
                     f"✅ Converted to {format} format and saved to [bold]{output_path}[/bold]",
+                    style="green",
+                )
+
+            if push_to_hub:
+                token, repo_id_value, private_flag, commit_message_value, path_in_repo_value = (
+                    resolve_hf_params()
+                )
+                hub_url = push_to_huggingface_hub(
+                    str(output_path),
+                    repo_id_value,
+                    token,
+                    private=private_flag,
+                    path_in_repo=path_in_repo_value,
+                    commit_message=commit_message_value,
+                )
+                console.print(
+                    f"☁️  Uploaded converted artifact to [bold]{hub_url}[/bold]",
                     style="green",
                 )
             return 0

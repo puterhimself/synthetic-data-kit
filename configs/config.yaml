@@ -87,6 +87,14 @@ format:
   include_metadata: true  # Include metadata in output files
   pretty_json: true  # Use indentation in JSON output
 
+# Hugging Face Hub configuration
+huggingface:
+  token: null  # Optionally set or rely on HUGGINGFACE_TOKEN environment variable
+  repo_id: null  # e.g., "username/dataset-name"
+  private: false  # Set true to create/update a private dataset repo
+  path_in_repo: null  # Optional subdirectory or file name inside the repo
+  commit_message: null  # Optional custom commit message when pushing artifacts
+
 # Analysis stage configuration
 analysis:
   enabled: true              # Enable automatic analysis before flows

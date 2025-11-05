@@ -53,7 +53,14 @@ def process_file(
         model: Model to use
         content_type: Type of content to generate (qa, summary, cot)
         num_pairs: Target number of QA pairs to generate
-        threshold: Quality threshold for filtering (1-10)
+        verbose: Verbosity level
+        provider: Provider to use
+        chunk_size: Chunk size for text splitting
+        chunk_overlap: Chunk overlap for text splitting
+        rolling_summary: Whether to use rolling summary
+        plan: Plan specification
+        file_plan: File-specific plan specification
+        dry_run: Whether to dry run the generation
 
     Returns:
         Path to the output file
