@@ -6,6 +6,7 @@
 # Logic for saving file format
 
 import os
+import re
 import json
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -221,12 +222,21 @@ def push_to_huggingface_hub(
         )
         return f"https://huggingface.co/datasets/{repo_id}"
 
-    repo_path = path_in_repo or os.path.basename(abs_output)
-    api.upload_file(
-        path_or_fileobj=abs_output,
-        path_in_repo=repo_path,
+
+    from datasets import Dataset
+
+    def _sanitize_split(name: str) -> str:
+        base = os.path.splitext(name)[0]
+        sanitized = re.sub(r"[^A-Za-z0-9_]+", "_", base).strip("_")
+        return sanitized if sanitized else "train"
+
+    dataset = Dataset.from_json(abs_output)
+    split_name = _sanitize_split(path_in_repo or os.path.basename(abs_output))
+    dataset.push_to_hub(
         repo_id=repo_id,
-        repo_type="dataset",
-        **commit_kwargs,
+        token=token,
+        private=private,
+        commit_message=commit_message,
+        split=split_name,
     )
     return f"https://huggingface.co/datasets/{repo_id}"

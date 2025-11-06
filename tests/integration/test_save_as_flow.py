@@ -96,11 +96,13 @@ def test_convert_format():
 
         assert len(convo_lines) == 2
 
-        first_conversation = json.loads(convo_lines[0])
-        assert isinstance(first_conversation, list)
-        assert first_conversation[0]["role"] == "system"
-        assert first_conversation[1]["role"] == "user"
-        assert first_conversation[1]["content"] == "What is synthetic data?"
+        first_record = json.loads(convo_lines[0])
+        assert isinstance(first_record, dict)
+        assert "conversations" in first_record
+        conversation_messages = first_record["conversations"]
+        assert conversation_messages[0]["role"] == "system"
+        assert conversation_messages[1]["role"] == "user"
+        assert conversation_messages[1]["content"] == "What is synthetic data?"
 
     finally:
         # Clean up

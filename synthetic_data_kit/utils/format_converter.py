@@ -101,5 +101,9 @@ def to_conversations_jsonl(conversations: List[List[Dict[str, Any]]], output_pat
     """Write one conversation (list of messages) per JSONL row"""
     with open(output_path, "w", encoding="utf-8") as f:
         for conversation in conversations:
-            f.write(json.dumps(conversation) + "\n")
+            record = {
+                # "id": idx,
+                "conversations": conversation,
+            }
+            f.write(json.dumps(record) + "\n")
     return output_path
