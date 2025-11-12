@@ -41,12 +41,15 @@ def determine_parser(file_path: str, config: Dict[str, Any], multimodal: bool = 
     from synthetic_data_kit.parsers.docx_parser import DOCXParser
     from synthetic_data_kit.parsers.ppt_parser import PPTParser
     from synthetic_data_kit.parsers.txt_parser import TXTParser
+    from synthetic_data_kit.parsers.image_parser import ImageParser
     from synthetic_data_kit.parsers.multimodal_parser import MultimodalParser
 
     ext = os.path.splitext(file_path)[1].lower()
     if multimodal:
         if ext in [".pdf", ".docx", ".pptx"]:
             return MultimodalParser()
+        elif ext in ImageParser.SUPPORTED_EXTENSIONS:
+            return ImageParser()
         else:
             raise ValueError(f"Unsupported file extension for multimodal parsing: {ext}")
 
@@ -74,6 +77,10 @@ def determine_parser(file_path: str, config: Dict[str, Any], multimodal: bool = 
             ".pptx": PPTParser(),
             ".txt": TXTParser(),
         }
+
+        # Image files always use ImageParser (which returns multimodal format)
+        if ext in ImageParser.SUPPORTED_EXTENSIONS:
+            return ImageParser()
 
         if ext in parsers:
             return parsers[ext]
@@ -104,6 +111,7 @@ def process_file(
     """
     from synthetic_data_kit.utils.lance_utils import create_lance_dataset
     import pyarrow as pa
+
     # Create output directory if it doesn't exist
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
@@ -113,6 +121,25 @@ def process_file(
 
     # Parse the file
     content = parser.parse(file_path)
+
+    # Check if content contains image data (detect multimodal content)
+    has_images = content and any("image" in item for item in content if isinstance(item, dict))
+    # Use multimodal schema if explicitly requested or if content contains images
+    use_multimodal_schema = multimodal or has_images
+
+    # Convert base64 image strings to binary if needed (for ImageParser compatibility)
+    if has_images:
+        import base64
+
+        for item in content:
+            if isinstance(item, dict) and "image" in item and item["image"]:
+                # If image is a string (base64), convert to binary
+                if isinstance(item["image"], str):
+                    try:
+                        item["image"] = base64.b64decode(item["image"])
+                    except Exception:
+                        # If decoding fails, keep original value
+                        pass
 
     # Generate output filename if not provided
     if not output_name:
@@ -138,14 +165,12 @@ def process_file(
     output_name += ".lance"
     output_path = os.path.join(output_dir, output_name)
 
-    schema = pa.schema([
-        pa.field("text", pa.string()),
-        pa.field("image", pa.binary())
-    ]) if multimodal else pa.schema([
-        pa.field("text", pa.string())
-    ])
+    schema = (
+        pa.schema([pa.field("text", pa.string()), pa.field("image", pa.binary())])
+        if use_multimodal_schema
+        else pa.schema([pa.field("text", pa.string())])
+    )
 
     create_lance_dataset(content, output_path, schema=schema)
-
 
     return output_path

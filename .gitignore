@@ -9,3 +9,5 @@ data/\ndata/\n*.pdf
 .venv-ci/
 data/
 example_output
+.ruff_cache/
+.cursor/

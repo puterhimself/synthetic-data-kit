@@ -14,11 +14,15 @@ from synthetic_data_kit.utils.text import split_into_chunks
 import math
 import base64
 
+
 class MultimodalQAGenerator:
     """Generates Multimodal Question Answering data (text QA from text+image context)"""
+
     def __init__(self, client: LLMClient, config_path: Optional[str] = None):
         self.client = client
-        self.config = load_config(str(config_path) if config_path else None) if config_path else client.config
+        self.config = (
+            load_config(str(config_path) if config_path else None) if config_path else client.config
+        )
         self.generation_config = get_generation_config(self.config)
 
     def generate_qa_pairs(self, documents, num_pairs=25, verbose=False):
@@ -40,18 +44,20 @@ class MultimodalQAGenerator:
             image = next((img for img in images if img is not None), None)
             if image is not None:
                 image_b64 = base64.b64encode(image).decode("utf-8")
-                user_content.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{image_b64}"}
-                })
+                user_content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{image_b64}"},
+                    }
+                )
             system_prompt = (
                 f"You are a helpful assistant. Given the following passage and image, generate {pairs_per_chunk} high-quality question-answer pairs. "
-                "Return ONLY valid JSON as a list: [{\"question\": \"...\", \"answer\": \"...\"}, ...]. "
+                'Return ONLY valid JSON as a list: [{"question": "...", "answer": "..."}, ...]. '
                 "Do not include any explanation, markdown, or text outside the JSON."
             )
             messages = [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
+                {"role": "user", "content": user_content},
             ]
             all_messages.append(messages)
         # Batch LLM calls
@@ -63,10 +69,11 @@ class MultimodalQAGenerator:
             batch_responses = self.client.batch_completion(
                 batch_messages,
                 temperature=self.generation_config.get("temperature", 0.7),
-                batch_size=batch_size
+                batch_size=batch_size,
             )
             for response in batch_responses:
                 import json as _json
+
                 try:
                     pairs = _json.loads(response)
                     if isinstance(pairs, dict):
@@ -81,13 +88,21 @@ class MultimodalQAGenerator:
                 break
         return all_qa_pairs[:num_pairs]
 
-    def process_dataset(self, documents, output_dir: str, num_examples=None, verbose=False, base_name: str = "multimodal_qa_pairs") -> str:
+    def process_dataset(
+        self,
+        documents,
+        output_dir: str,
+        num_examples=None,
+        verbose=False,
+        base_name: str = "multimodal_qa_pairs",
+    ) -> str:
         # documents: list of dicts with 'text' and 'image'
         qa_pairs = self.generate_qa_pairs(documents, num_examples or 25, verbose=verbose)
         output_path = os.path.join(output_dir, f"{base_name}.json")
         with open(output_path, "w", encoding="utf-8") as f:
             import json
+
             json.dump({"qa_pairs": qa_pairs}, f, indent=2)
         if verbose:
             print(f"Saved processed multimodal QA pairs to {output_path}")
-        return output_path 
+        return output_path

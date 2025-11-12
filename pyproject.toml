@@ -8,7 +8,7 @@ version = "0.0.5b1"
 description = "Tool for generating high quality Synthetic datasets"
 readme = "README.md"
 requires-python = ">=3.8"
-license = {text = "MIT"}
+license = { text = "MIT" }
 dependencies = [
     "datasets>=2.14.0",
     "pdfminer-six>=20221105",
@@ -26,20 +26,35 @@ dependencies = [
     "bootstrap-flask>=2.2.0",
     "beautifulsoup4>=4.12.0",
     "pylance",
-    "PyMuPDF"
+    "PyMuPDF",
+    "lance>=1.2.1",
+    "pyarrow>=15.0.0",
+    "spacy>=3.0.0",
+    "nltk>=3.8.0",
 ]
 
 # These fields appear in pip show
-summary = "Create and curate synthetic datasets for fine-tuning LLMs"
 authors = [
-    {name = "Sanyam Bhutani", email = "sanyambhutani@meta.com"},
-    {name = "Hamid Shojanazeri", email = "hamidnazeri@meta.com"},
+    { name = "Sanyam Bhutani", email = "sanyambhutani@meta.com" },
+    { name = "Hamid Shojanazeri", email = "hamidnazeri@meta.com" },
 ]
 maintainers = [
-    {name = "Sanyam Bhutani", email = "sanyambhutani@meta.com"},
-    {name = "Hamid Shojanazeri", email = "hamidnazeri@meta.com"},
+    { name = "Sanyam Bhutani", email = "sanyambhutani@meta.com" },
+    { name = "Hamid Shojanazeri", email = "hamidnazeri@meta.com" },
 ]
-keywords = ["llm", "synthetic-data", "fine-tuning", "llama", "ai", "machine-learning", "nlp", "dataset-generation", "chain-of-thought", "tool-use", "reasoning"]
+keywords = [
+    "llm",
+    "synthetic-data",
+    "fine-tuning",
+    "llama",
+    "ai",
+    "machine-learning",
+    "nlp",
+    "dataset-generation",
+    "chain-of-thought",
+    "tool-use",
+    "reasoning",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -95,7 +110,7 @@ target-version = "py38"
 #     "C4", # flake8-comprehensions
 #     "UP", # pyupgrade
 # ]
-select = []  # Disable all linting
+select = [] # Disable all linting
 ignore = []
 
 [tool.ruff.format]
@@ -111,7 +126,11 @@ dev = [
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
     "beautifulsoup4>=4.12.0",
-    "PyMuPDF"
+    "PyMuPDF",
+    "lance>=1.2.1",
+    "pyarrow>=15.0.0",
+    "rich>=14.2.0",
+    "typer>=0.20.0",
 ]
 
 [tool.mypy]
@@ -134,7 +153,4 @@ markers = [
     "integration: marks tests as integration tests",
     "functional: marks tests as functional tests",
 ]
-filterwarnings = [
-    "ignore::DeprecationWarning",
-    "ignore::UserWarning",
-]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]

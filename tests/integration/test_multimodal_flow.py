@@ -109,3 +109,133 @@ def test_multimodal_flow(patch_config, test_env, file_type, create_dummy_file):
             if os.path.exists(create_output_dir):
                 import shutil
                 shutil.rmtree(create_output_dir)
+
+
+@pytest.mark.integration
+def test_image_ingest_to_multimodal_qa_flow(patch_config, test_env):
+    """Test the full workflow from image ingestion to multimodal QA generation."""
+    import base64
+    import tempfile
+    import lance
+    
+    # Create a test image file
+    png_base64 = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAiMBgUdQW6cAAAAASUVORK5CYII="
+    )
+    image_bytes = base64.b64decode(png_base64)
+    
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as img_file:
+        img_file.write(image_bytes)
+        image_path = img_file.name
+    
+    ingest_output_dir = tempfile.mkdtemp()
+    create_output_dir = tempfile.mkdtemp()
+    
+    try:
+        # Ingest the image file
+        lance_path = ingest.process_file(
+            image_path,
+            output_dir=ingest_output_dir,
+            multimodal=False  # Should auto-detect as multimodal
+        )
+        
+        assert os.path.exists(lance_path)
+        assert lance_path.endswith(".lance")
+        
+        # Verify the Lance dataset has correct schema
+        dataset = lance.dataset(lance_path)
+        schema = dataset.schema
+        assert "text" in schema.names
+        assert "image" in schema.names
+        
+        # Verify image data is stored correctly
+        table = dataset.to_table()
+        assert table.num_rows > 0
+        assert table[0]["image"].as_py() is not None
+        
+        # Mock LLMClient and MultimodalQAGenerator for the create step
+        with patch("synthetic_data_kit.core.create.LLMClient") as mock_llm_client_class, \
+             patch("synthetic_data_kit.core.create.MultimodalQAGenerator") as mock_mm_gen_class:
+            mock_llm_client = MagicMock()
+            mock_llm_client_class.return_value = mock_llm_client
+            
+            mock_generator = MagicMock()
+            output_path = os.path.join(create_output_dir, "image_qa.json")
+            mock_generator.process_dataset.return_value = output_path
+            mock_mm_gen_class.return_value = mock_generator
+            
+            # Create a dummy json file to be returned by the mock
+            os.makedirs(create_output_dir, exist_ok=True)
+            with open(output_path, "w") as f:
+                f.write('{"qa_pairs": [{"question": "What is in the image?", "answer": "A test image"}]}')
+            
+            # Create multimodal-qa pairs from the Lance dataset
+            json_path = create.process_file(
+                lance_path,
+                output_dir=create_output_dir,
+                content_type="multimodal-qa"
+            )
+            
+            assert os.path.exists(json_path)
+            assert json_path.endswith(".json")
+            mock_generator.process_dataset.assert_called_once()
+            
+    finally:
+        # Clean up temporary files and directories
+        if os.path.exists(image_path):
+            os.unlink(image_path)
+        if os.path.exists(ingest_output_dir):
+            import shutil
+            shutil.rmtree(ingest_output_dir)
+        if os.path.exists(create_output_dir):
+            import shutil
+            shutil.rmtree(create_output_dir)
+
+
+@pytest.mark.integration
+def test_image_directory_ingest_flow(patch_config, test_env):
+    """Test ingesting a directory of images."""
+    import base64
+    import tempfile
+    import lance
+    
+    # Create a temporary directory with multiple image files
+    images_dir = tempfile.mkdtemp()
+    ingest_output_dir = tempfile.mkdtemp()
+    
+    png_base64 = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAiMBgUdQW6cAAAAASUVORK5CYII="
+    )
+    image_bytes = base64.b64decode(png_base64)
+    
+    image_files = ["img1.png", "img2.jpg", "img3.jpeg"]
+    for img_file in image_files:
+        img_path = os.path.join(images_dir, img_file)
+        with open(img_path, "wb") as f:
+            f.write(image_bytes)
+    
+    try:
+        # Process each image file
+        for img_file in image_files:
+            img_path = os.path.join(images_dir, img_file)
+            lance_path = ingest.process_file(
+                img_path,
+                output_dir=ingest_output_dir,
+                multimodal=False
+            )
+            
+            assert os.path.exists(lance_path)
+            
+            # Verify schema
+            dataset = lance.dataset(lance_path)
+            schema = dataset.schema
+            assert "text" in schema.names
+            assert "image" in schema.names
+            
+    finally:
+        # Clean up
+        import shutil
+        if os.path.exists(images_dir):
+            shutil.rmtree(images_dir)
+        if os.path.exists(ingest_output_dir):
+            shutil.rmtree(ingest_output_dir)

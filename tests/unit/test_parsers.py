@@ -1,5 +1,6 @@
 """Unit tests for document parsers."""
 
+import base64
 import os
 import tempfile
 from unittest.mock import MagicMock, patch
@@ -9,6 +10,7 @@ import pytest
 from synthetic_data_kit.parsers.html_parser import HTMLParser
 from synthetic_data_kit.parsers.pdf_parser import PDFParser
 from synthetic_data_kit.parsers.txt_parser import TXTParser
+from synthetic_data_kit.parsers.image_parser import ImageParser
 
 
 @pytest.mark.unit
@@ -140,3 +142,40 @@ def test_pdf_parser():
                 saved_content = f.read()
 
             assert saved_content == "This is sample PDF content for testing."
+
+
+@pytest.mark.unit
+def test_image_parser_base64_roundtrip(tmp_path):
+    """Test that the image parser returns Base64 content and can save it back."""
+
+    png_base64 = (
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8Xw8AAiMBgUdQW6cAAAAASUVORK5CYII="
+    )
+    image_bytes = base64.b64decode(png_base64)
+    image_path = tmp_path / "sample.png"
+    image_path.write_bytes(image_bytes)
+
+    parser = ImageParser()
+    result = parser.parse(str(image_path))
+
+    assert len(result) == 1
+    entry = result[0]
+    assert entry["text"] == ""
+    assert entry["image"] == png_base64
+
+    output_path = tmp_path / "roundtrip.png"
+    parser.save(entry["image"], str(output_path))
+
+    assert output_path.read_bytes() == image_bytes
+
+
+@pytest.mark.unit
+def test_image_parser_rejects_unsupported_extension(tmp_path):
+    """Test that parsing a non-image file raises a ValueError."""
+
+    fake_file = tmp_path / "not_an_image.txt"
+    fake_file.write_text("not image content")
+
+    parser = ImageParser()
+    with pytest.raises(ValueError, match="Unsupported image extension"):
+        parser.parse(str(fake_file))

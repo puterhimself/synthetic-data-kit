@@ -197,3 +197,198 @@ def test_save_as_command(patch_config):
         # Clean up the temporary file
         if os.path.exists(input_path):
             os.unlink(input_path)
+
+
+@pytest.mark.functional
+def test_save_as_push_to_hub_requires_token(patch_config):
+    """Ensure push-to-hub flag errors when no token is available."""
+    runner = CliRunner()
+
+    with tempfile.NamedTemporaryFile(suffix=".json", mode="w+", delete=False) as f:
+        json.dump([{"question": "Q?", "answer": "A."}], f)
+        input_path = f.name
+
+    original_token = os.environ.pop("HUGGINGFACE_TOKEN", None)
+
+    try:
+        with patch("synthetic_data_kit.core.save_as.convert_format") as mock_convert:
+            output_path = os.path.join(os.path.dirname(input_path), "output.jsonl")
+            mock_convert.return_value = output_path
+
+            result = runner.invoke(
+                app,
+                [
+                    "save-as",
+                    input_path,
+                    "--format",
+                    "jsonl",
+                    "--push-to-hub",
+                    "--hub-repo",
+                    "tester/dataset",
+                ],
+            )
+
+        assert result.exit_code == 1
+        assert "Hugging Face token not found" in result.stdout
+    finally:
+        if original_token is not None:
+            os.environ["HUGGINGFACE_TOKEN"] = original_token
+        if os.path.exists(input_path):
+            os.unlink(input_path)
+
+
+@pytest.mark.functional
+def test_save_as_push_to_hub_success(patch_config):
+    """Verify push-to-hub uploads when token and repo are provided."""
+    runner = CliRunner()
+
+    with tempfile.NamedTemporaryFile(suffix=".json", mode="w+", delete=False) as f:
+        json.dump([{"question": "Q?", "answer": "A."}], f)
+        input_path = f.name
+
+    try:
+        with patch("synthetic_data_kit.core.save_as.convert_format") as mock_convert, patch(
+            "synthetic_data_kit.core.save_as.push_to_huggingface_hub"
+        ) as mock_push:
+            output_path = os.path.join(os.path.dirname(input_path), "output.jsonl")
+            mock_convert.return_value = output_path
+            mock_push.return_value = "https://huggingface.co/datasets/tester/dataset"
+
+            with patch.dict(os.environ, {"HUGGINGFACE_TOKEN": "hf_token_123"}, clear=False):
+                result = runner.invoke(
+                    app,
+                    [
+                        "save-as",
+                        input_path,
+                        "--format",
+                        "jsonl",
+                        "--push-to-hub",
+                        "--hub-repo",
+                        "tester/dataset",
+                        "--hub-private",
+                        "--hub-commit-message",
+                        "Initial upload",
+                    ],
+                )
+
+        assert result.exit_code == 0
+        assert "Uploaded converted artifact" in result.stdout
+        mock_convert.assert_called_once()
+        mock_push.assert_called_once_with(
+            output_path,
+            "tester/dataset",
+            "hf_token_123",
+            private=True,
+            path_in_repo=None,
+            commit_message="Initial upload",
+        )
+    finally:
+        if os.path.exists(input_path):
+            os.unlink(input_path)
+
+
+@pytest.mark.functional
+@patch("synthetic_data_kit.utils.directory_processor.process_directory_save_as")
+@patch("synthetic_data_kit.core.save_as.push_to_huggingface_hub")
+def test_save_as_directory_pushes_files_by_default(
+    mock_push, mock_process_directory, patch_config, tmp_path
+):
+    """Default directory uploads push individual files, not the whole folder."""
+
+    runner = CliRunner()
+
+    output_dir = tmp_path / "final"
+    output_dir.mkdir()
+    output_file = output_dir / "sample_conversation.jsonl"
+    output_file.touch()
+
+    mock_process_directory.return_value = {
+        "total_files": 1,
+        "successful": 1,
+        "failed": 0,
+        "results": [
+            {
+                "input_file": str(tmp_path / "curated.json"),
+                "output_file": str(output_file),
+                "format": "conversation",
+                "storage": "json",
+                "status": "success",
+            }
+        ],
+        "errors": [],
+    }
+
+    mock_push.return_value = "https://huggingface.co/datasets/tester/dataset"
+
+    with patch.dict(os.environ, {"HUGGINGFACE_TOKEN": "hf_token_456"}, clear=False):
+        result = runner.invoke(
+            app,
+            [
+                "save-as",
+                str(tmp_path),
+                "--format",
+                "conversation",
+                "--push-to-hub",
+                "--hub-repo",
+                "tester/dataset",
+                "--output",
+                str(output_dir),
+            ],
+        )
+
+    assert result.exit_code == 0
+    mock_push.assert_called_once()
+    assert mock_push.call_args[0][0] == str(output_file)
+
+
+@pytest.mark.functional
+@patch("synthetic_data_kit.utils.directory_processor.process_directory_save_as")
+@patch("synthetic_data_kit.core.save_as.push_to_huggingface_hub")
+def test_save_as_directory_pushes_folder_when_requested(
+    mock_push, mock_process_directory, patch_config, tmp_path
+):
+    """--hub-upload-folder uploads the entire directory."""
+
+    runner = CliRunner()
+
+    output_dir = tmp_path / "final"
+    output_dir.mkdir()
+
+    mock_process_directory.return_value = {
+        "total_files": 1,
+        "successful": 1,
+        "failed": 0,
+        "results": [
+            {
+                "input_file": str(tmp_path / "curated.json"),
+                "output_file": str(output_dir / "sample_conversation.jsonl"),
+                "format": "conversation",
+                "storage": "json",
+                "status": "success",
+            }
+        ],
+        "errors": [],
+    }
+
+    mock_push.return_value = "https://huggingface.co/datasets/tester/dataset"
+
+    with patch.dict(os.environ, {"HUGGINGFACE_TOKEN": "hf_token_789"}, clear=False):
+        result = runner.invoke(
+            app,
+            [
+                "save-as",
+                str(tmp_path),
+                "--format",
+                "conversation",
+                "--push-to-hub",
+                "--hub-repo",
+                "tester/dataset",
+                "--output",
+                str(output_dir),
+                "--hub-upload-folder",
+            ],
+        )
+
+    assert result.exit_code == 0
+    mock_push.assert_called_once()
+    assert mock_push.call_args[0][0] == str(output_dir)

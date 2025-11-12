@@ -10,3 +10,4 @@ from synthetic_data_kit.parsers.youtube_parser import YouTubeParser
 from synthetic_data_kit.parsers.docx_parser import DOCXParser
 from synthetic_data_kit.parsers.ppt_parser import PPTParser
 from synthetic_data_kit.parsers.txt_parser import TXTParser
+from synthetic_data_kit.parsers.image_parser import ImageParser

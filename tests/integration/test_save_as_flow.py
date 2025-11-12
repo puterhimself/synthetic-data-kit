@@ -83,6 +83,27 @@ def test_convert_format():
         assert data[0]["instruction"] == "What is synthetic data?"
         assert data[0]["output"] == "Synthetic data is artificially generated data."
 
+        # Test converting to conversation JSONL format
+        conversation_output = os.path.join(output_dir, "output_conversation.jsonl")
+        result_path = save_as.convert_format(
+            input_path=input_path, output_path=conversation_output, format_type="conversation"
+        )
+
+        assert os.path.exists(result_path)
+
+        with open(result_path) as f:
+            convo_lines = f.readlines()
+
+        assert len(convo_lines) == 2
+
+        first_record = json.loads(convo_lines[0])
+        assert isinstance(first_record, dict)
+        assert "conversations" in first_record
+        conversation_messages = first_record["conversations"]
+        assert conversation_messages[0]["role"] == "system"
+        assert conversation_messages[1]["role"] == "user"
+        assert conversation_messages[1]["content"] == "What is synthetic data?"
+
     finally:
         # Clean up
         if os.path.exists(input_path):
